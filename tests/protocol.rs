@@ -50,14 +50,26 @@ fn round_trip(messages: &[Value]) -> Vec<Value> {
 }
 
 fn tempfile(contents: &str) -> std::path::PathBuf {
+    // `process::id() + SystemTime::now().as_nanos()` is normally
+    // unique per call — but on Windows-nightly under cargo-test's
+    // parallel scheduler two calls have been observed landing in
+    // the same nanosecond, leading to a path collision that
+    // silently shared a fixture between concurrent tests. Append
+    // a monotonically-increasing process-local counter so the
+    // path is guaranteed unique even under nano collisions.
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+
     let dir = std::env::temp_dir();
     let path = dir.join(format!(
-        "noyalib-mcp-test-{}-{}.yaml",
+        "noyalib-mcp-test-{}-{}-{}.yaml",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        seq,
     ));
     std::fs::write(&path, contents).unwrap();
     path
