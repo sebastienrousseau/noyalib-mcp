@@ -17,8 +17,9 @@
 
 #![allow(missing_docs, unused_results)]
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use noyalib::cst::{format, parse_document};
+use std::hint::black_box;
 
 const YAML: &str = r#"
 server:
