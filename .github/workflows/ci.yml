@@ -43,7 +43,7 @@ jobs:
     uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@bbf0b9ca4930398a4984c78deccb91002c15d13b
 
   docs-strict:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@bbf0b9ca4930398a4984c78deccb91002c15d13b
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@a472e147c5a563a3f07e1f0cf4fdb10f9595e408
 
   verify-signatures:
     uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@bbf0b9ca4930398a4984c78deccb91002c15d13b
