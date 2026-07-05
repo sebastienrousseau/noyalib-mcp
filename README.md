@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sebastienrousseau/noyalib/actions"><img src="https://img.shields.io/github/actions/workflow/status/sebastienrousseau/noyalib/ci.yml?style=for-the-badge&logo=github" alt="Build" /></a>
+  <a href="https://github.com/sebastienrousseau/noyalib-mcp/actions"><img src="https://img.shields.io/github/actions/workflow/status/sebastienrousseau/noyalib-mcp/ci.yml?style=for-the-badge&logo=github" alt="Build" /></a>
   <a href="https://crates.io/crates/noyalib-mcp"><img src="https://img.shields.io/crates/v/noyalib-mcp.svg?style=for-the-badge&color=fc8d62&logo=rust" alt="Crates.io" /></a>
   <a href="https://docs.rs/noyalib-mcp"><img src="https://img.shields.io/badge/docs.rs-noyalib--mcp-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" alt="Docs.rs" /></a>
   <a href="https://lib.rs/crates/noyalib-mcp"><img src="https://img.shields.io/badge/lib.rs-noyalib-orange.svg?style=for-the-badge" alt="lib.rs" /></a>
-  <a href="https://scorecard.dev/viewer/?uri=github.com/sebastienrousseau/noyalib"><img src="https://img.shields.io/ossf-scorecard/github.com/sebastienrousseau/noyalib?style=for-the-badge&label=OpenSSF%20Scorecard&logo=openssf" alt="OpenSSF Scorecard" /></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/sebastienrousseau/noyalib-mcp"><img src="https://img.shields.io/ossf-scorecard/github.com/sebastienrousseau/noyalib-mcp?style=for-the-badge&label=OpenSSF%20Scorecard&logo=openssf" alt="OpenSSF Scorecard" /></a>
 </p>
 
 ---
@@ -49,11 +49,21 @@ deployment shape):
 ```bash
 # npm wrapper — auto-downloads the matching binary on first run,
 # caches under ~/.cache/noyalib-mcp/<version>/.
-npx noyalib-mcp
+npx @sebastienrousseau/noyalib-mcp
 
 # Container — multi-arch (linux/amd64, linux/arm64).
 docker run --rm -i ghcr.io/sebastienrousseau/noyalib-mcp:latest
 ```
+
+> **Split from the monorepo since v0.0.13.** Prior versions
+> shipped from `sebastienrousseau/noyalib/crates/noyalib-mcp/`
+> under the workspace-lockstep release cadence. From v0.0.13
+> onward `noyalib-mcp` lives here as its own crate, still
+> released in strict lockstep with the parent
+> [`noyalib`](https://github.com/sebastienrousseau/noyalib) at
+> the same version. See
+> [ADR-0005](https://github.com/sebastienrousseau/noyalib/blob/main/doc/adr/0005-workspace-split.md)
+> for the rationale and rollback recipe.
 
 Both consume the same signed binary attached to every GitHub
 Release. See [Verification](#verification) for the verify
@@ -214,7 +224,7 @@ underlying binary before trusting it:
 
 ```bash
 COSIGN_EXPERIMENTAL=1 cosign verify-blob \
-  --certificate-identity-regexp 'https://github.com/sebastienrousseau/noyalib/' \
+  --certificate-identity-regexp 'https://github.com/sebastienrousseau/noyalib-mcp/' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   --certificate <artefact>.pem \
   --signature   <artefact>.sig \

@@ -5,8 +5,8 @@ edition = "2024"
 rust-version = "1.85.0"
 license = "MIT OR Apache-2.0"
 description = "Model Context Protocol server exposing noyalib's lossless YAML editing to AI agents"
-repository = "https://github.com/sebastienrousseau/noyalib"
-homepage = "https://github.com/sebastienrousseau/noyalib"
+repository = "https://github.com/sebastienrousseau/noyalib-mcp"
+homepage = "https://github.com/sebastienrousseau/noyalib-mcp"
 documentation = "https://docs.rs/noyalib-mcp"
 readme = "README.md"
 keywords = ["yaml", "mcp", "ai", "claude", "tooling"]
@@ -22,7 +22,9 @@ name = "noyalib-mcp"
 path = "src/main.rs"
 
 [dependencies]
-noyalib = { path = "../noyalib", version = "0.0.13" }
+# Strict-lockstep versioning (ADR-0005). Dependabot ignores this
+# dep; bumps are coordinated with the parent noyalib release tag.
+noyalib = { version = "=0.0.13", default-features = false, features = ["std"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: 2026 Noyalib
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+name: CI
+
+# Every job here consumes a reusable workflow from
+# `sebastienrousseau/noyalib` pinned by SHA. A supply-chain
+# hardening pass in noyalib propagates to this satellite via a
+# Dependabot SHA-bump PR — enforced by the 48h propagation SLA
+# monitor in the parent repo (scripts/shared-workflow-propagation-monitor.sh).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Caller-side permissions must be at least as broad as every
+# reusable workflow's declared `permissions:` block.
+# `shared-verify-signatures.yml` needs `pull-requests: read` to
+# iterate PR commits via the REST API. Documented in ADR-0005
+# permissions table (parent repo).
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-deny:
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@bbf0b9ca4930398a4984c78deccb91002c15d13b
+
+  cargo-vet:
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-vet.yml@bbf0b9ca4930398a4984c78deccb91002c15d13b
+
+  cargo-machete:
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@bbf0b9ca4930398a4984c78deccb91002c15d13b
+
+  reuse-lint:
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@bbf0b9ca4930398a4984c78deccb91002c15d13b
+
+  docs-strict:
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@bbf0b9ca4930398a4984c78deccb91002c15d13b
+
+  verify-signatures:
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@bbf0b9ca4930398a4984c78deccb91002c15d13b
+
+  test-matrix:
+    # `noyalib-mcp` is a stdio-JSON-RPC server; the OS matrix runs
+    # the full triad (ubuntu/macos/windows × stable/nightly) because
+    # the process-lifecycle + IPC surface differs materially across
+    # host operating systems (line endings, path separators, signal
+    # handling).
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@bbf0b9ca4930398a4984c78deccb91002c15d13b
