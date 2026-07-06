@@ -16,7 +16,7 @@
 #                                          binary from a GitHub
 #                                          Release on first run)
 
-FROM rust:1.96-bookworm@sha256:19817ead3289c8c631c73df281e18b59b172f6a31f4f563290f69cddd06c30e9 AS build
+FROM rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663 AS build
 
 WORKDIR /src
 COPY . .
