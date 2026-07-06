@@ -10,8 +10,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/sebastienrousseau/noyalib-mcp",
-      "version": "0.0.13",
+      "identifier": "ghcr.io/sebastienrousseau/noyalib-mcp:0.0.13",
       "transport": {
         "type": "stdio"
       }
