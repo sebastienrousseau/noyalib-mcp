@@ -25,8 +25,7 @@ ARG SOURCE_DATE_EPOCH
 ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-0}
 ENV RUSTFLAGS="--remap-path-prefix=/src=/build --remap-path-prefix=/usr/local/cargo=/cargo"
 
-RUN cargo build --release --locked \
-    --manifest-path crates/noyalib-mcp/Cargo.toml
+RUN cargo build --release --locked
 
 # ── Runtime stage ────────────────────────────────────────────────
 FROM gcr.io/distroless/cc-debian12:nonroot@sha256:b0ae8e989418b458e0f25489bc3be523718938a2b70864cc0f6a00af1ddbd985
