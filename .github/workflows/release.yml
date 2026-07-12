@@ -233,6 +233,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Idempotent: a re-tag/re-run may find the release already
+          # created (gh release create errors on an existing tag). Drop it
+          # first — keeping the git tag — so the create below succeeds.
+          gh release delete "$GITHUB_REF_NAME" --yes 2>/dev/null || true
           gh release create "$GITHUB_REF_NAME" \
             --title "noyalib-mcp $GITHUB_REF_NAME" \
             --notes-file RELEASE_NOTES.md \
@@ -260,7 +264,15 @@ jobs:
       - name: Publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --all-features --locked
+        run: |
+          set -uxo pipefail
+          out=$(cargo publish --all-features --locked 2>&1) && rc=0 || rc=$?
+          echo "$out"
+          if [ "$rc" -ne 0 ]; then
+            echo "$out" | grep -qE 'already (exists|uploaded)' \
+              && { echo "version already on crates.io — tolerating"; exit 0; }
+            exit "$rc"
+          fi
 
   # ── Publish npm wrapper ─────────────────────────────────────────────
   npm-publish:
@@ -278,8 +290,13 @@ jobs:
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+
+      # npm OIDC Trusted Publishing for the publish (not just provenance)
+      # requires npm >= 11.5.1; upgrade to avoid the E404-on-PUT failure.
+      - name: Ensure npm supports OIDC Trusted Publishing
+        run: npm install -g npm@latest
 
       - name: Sync wrapper version to tag
         working-directory: pkg/npm-wrapper
@@ -289,7 +306,17 @@ jobs:
 
       - name: Publish (Trusted Publishing + provenance)
         working-directory: pkg/npm-wrapper
-        run: npm publish --provenance --access public
+        run: |
+          set -uxo pipefail
+          # Idempotent: a re-tag may find this version already on npm
+          # (npm forbids republishing the same version -> E403).
+          out=$(npm publish --provenance --access public 2>&1) && rc=0 || rc=$?
+          echo "$out"
+          if [ "$rc" -ne 0 ]; then
+            echo "$out" | grep -qiE 'cannot publish over|previously published|already exists' \
+              && { echo "version already on npm — tolerating"; exit 0; }
+            exit "$rc"
+          fi
 
   # ── Publish GHCR container image ────────────────────────────────────
   container-publish:
@@ -365,7 +392,20 @@ jobs:
 
       - name: Install mcp-publisher
         run: |
-          curl -sfL https://raw.githubusercontent.com/modelcontextprotocol/registry/main/scripts/install-mcp-publisher.sh | bash
+          set -euo pipefail
+          # The old install-mcp-publisher.sh (raw.githubusercontent … main
+          # /scripts/) now 404s — mcp-publisher ships as release binaries.
+          # Pin a known-good version for a reproducible, supply-chain-safe
+          # download (bump deliberately, not implicitly).
+          ver="v1.7.9"
+          curl -sfL "https://github.com/modelcontextprotocol/registry/releases/download/${ver}/mcp-publisher_linux_amd64.tar.gz" \
+            | tar -xz mcp-publisher
+          sudo install -m0755 mcp-publisher /usr/local/bin/mcp-publisher
+          mcp-publisher --version
 
       - name: Publish to MCP Registry
-        run: mcp-publisher publish
+        run: |
+          # Authenticate first — `publish` needs a prior login. Use the
+          # GitHub Actions OIDC token (job has id-token: write).
+          mcp-publisher login github-oidc
+          mcp-publisher publish
