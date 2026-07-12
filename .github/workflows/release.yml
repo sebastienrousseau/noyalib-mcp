@@ -408,4 +408,12 @@ jobs:
           # Authenticate first — `publish` needs a prior login. Use the
           # GitHub Actions OIDC token (job has id-token: write).
           mcp-publisher login github-oidc
-          mcp-publisher publish
+          # Idempotent: a re-tag re-run finds the version already
+          # registered ("cannot publish duplicate version") — tolerate it.
+          out=$(mcp-publisher publish 2>&1) && rc=0 || rc=$?
+          echo "$out"
+          if [ "$rc" -ne 0 ]; then
+            echo "$out" | grep -qi 'duplicate version' \
+              && { echo "version already in MCP registry — tolerating"; exit 0; }
+            exit "$rc"
+          fi
