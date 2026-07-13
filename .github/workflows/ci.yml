@@ -37,7 +37,7 @@ jobs:
     uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-vet.yml@a472e147c5a563a3f07e1f0cf4fdb10f9595e408
 
   cargo-machete:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@a472e147c5a563a3f07e1f0cf4fdb10f9595e408
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@f1e0beff99fedea30fc263689db67240c9b62892
 
   reuse-lint:
     uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@a472e147c5a563a3f07e1f0cf4fdb10f9595e408
