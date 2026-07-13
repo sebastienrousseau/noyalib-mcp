@@ -54,4 +54,4 @@ jobs:
     # the process-lifecycle + IPC surface differs materially across
     # host operating systems (line endings, path separators, signal
     # handling).
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@a472e147c5a563a3f07e1f0cf4fdb10f9595e408
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@f1e0beff99fedea30fc263689db67240c9b62892
