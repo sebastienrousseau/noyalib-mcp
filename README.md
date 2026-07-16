@@ -28,7 +28,7 @@
 - [Quick Start](#quick-start) — JSON-RPC handshake
 - [Why this approach?](#why-this-approach) — design rationale
 - [Connect](#connect) — per-client configuration
-- [Tools exposed](#tools-exposed) — MCP tool reference
+- [Tools](#tools) — MCP tool reference
 - [Examples](#examples) — runnable scripts
 - [Verification](#verification) — cosign + npm provenance
 - [When not to use noyalib-mcp](#when-not-to-use-noyalib-mcp)
@@ -171,16 +171,14 @@ delimited JSON-RPC 2.0.
 
 ---
 
-## Tools exposed
+## Tools
 
 The v0.0.1 server registers two file-oriented tools — both
 operate on a YAML file at `file: <path>`, not on inline source
 strings, so an agent's edits land on disk losslessly:
 
-| Tool | Arguments | Returns |
-|---|---|---|
-| `noyalib_get` | `{ file: string, path: string }` | The raw source fragment at the dotted/indexed path (e.g. `server.host`, `items[0].name`). No re-quoting; no canonicalisation. |
-| `noyalib_set` | `{ file: string, path: string, value: string }` | The file rewritten via the lossless CST so only the touched span changes; comments, blank lines, and sibling formatting survive byte-for-byte. The `value` is a YAML fragment (`0.0.2`, `"hello"`, `[1, 2, 3]`); a parse failure leaves the file unchanged. |
+- `noyalib_get` — Takes `{ file: string, path: string }`; returns the raw source fragment at the dotted/indexed path (e.g. `server.host`, `items[0].name`). No re-quoting; no canonicalisation.
+- `noyalib_set` — Takes `{ file: string, path: string, value: string }`; returns the file rewritten via the lossless CST so only the touched span changes; comments, blank lines, and sibling formatting survive byte-for-byte. The `value` is a YAML fragment (`0.0.2`, `"hello"`, `[1, 2, 3]`); a parse failure leaves the file unchanged.
 
 Each tool's full input schema lives in the response to
 `tools/list`. The server also handles the standard
