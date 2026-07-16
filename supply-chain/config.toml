@@ -80,7 +80,7 @@ version = "0.8.6"
 criteria = "safe-to-run"
 
 [[exemptions.crossbeam-epoch]]
-version = "0.9.18"
+version = "0.9.20"
 criteria = "safe-to-run"
 
 [[exemptions.crossbeam-utils]]
@@ -148,11 +148,11 @@ version = "2.8.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.noyalib]]
-version = "0.0.13"
+version = "0.0.15"
 criteria = "safe-to-deploy"
 
 [[exemptions.noyalib-mcp]]
-version = "0.0.13"
+version = "0.0.15"
 criteria = "safe-to-deploy"
 
 [[exemptions.num-traits]]
