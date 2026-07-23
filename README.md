@@ -258,9 +258,12 @@ Full cookbook: [`pkg/VERIFY.md`](https://github.com/sebastienrousseau/noyalib/bl
 
 ## Compatibility
 
-**MSRV: Rust 1.75.0** stable — same floor as the core
-`noyalib` library. The MCP wire surface is text-only JSON-RPC
-and pulls no nightly-only deps. CI verifies the floor on every
+**MSRV: Rust 1.86.0** stable — same floor as the core
+`noyalib` library. This is a deliberate policy choice: one floor
+across the whole lockstep set, with headroom for the dependency
+tree. No current dependency *requires* 1.86 — this crate still
+compiles on 1.85. The MCP wire surface is text-only JSON-RPC and
+pulls no nightly-only deps. CI verifies the floor on every
 PR via the `Per-crate MSRV` workflow job. The bump policy
 lives in
 [`doc/POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/doc/POLICIES.md#1-msrv-minimum-supported-rust-version).
