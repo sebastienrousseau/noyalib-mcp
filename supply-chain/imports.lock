@@ -1,2 +1,6 @@
 
 # cargo-vet imports lock
+
+[[unpublished.noyalib-mcp]]
+version = "0.0.16"
+audited_as = "0.0.15"
