@@ -258,9 +258,14 @@ Full cookbook: [`pkg/VERIFY.md`](https://github.com/sebastienrousseau/noyalib/bl
 
 ## Compatibility
 
-**MSRV: Rust 1.75.0** stable — same floor as the core
-`noyalib` library. The MCP wire surface is text-only JSON-RPC
-and pulls no nightly-only deps. CI verifies the floor on every
+**MSRV: Rust 1.86.0** stable — the lowest toolchain this crate
+can be **built and tested** on, matching the `noyalib` core floor.
+`criterion 0.8` (the benchmark dev-dependency) declares
+`rust-version = 1.86`, so `cargo check --all-targets` and the
+bench suite fail on 1.85 with `criterion@0.8.2 requires rustc
+1.86` — `cargo check --lib` alone still builds on 1.85. We publish
+the number we verify. The MCP wire surface itself is text-only
+JSON-RPC and pulls no nightly-only deps. CI verifies the floor on every
 PR via the `Per-crate MSRV` workflow job. The bump policy
 lives in
 [`doc/POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/doc/POLICIES.md#1-msrv-minimum-supported-rust-version).
