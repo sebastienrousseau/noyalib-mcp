@@ -72,7 +72,7 @@ For team-internal hosted use:
 
 ```dockerfile
 # Dockerfile
-FROM rust:1.85-slim AS build
+FROM rust:1.86-slim AS build
 WORKDIR /src
 COPY . .
 RUN cargo install --path crates/noyalib-mcp --locked
