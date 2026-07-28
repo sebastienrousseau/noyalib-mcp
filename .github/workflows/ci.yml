@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   cargo-deny:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@a472e147c5a563a3f07e1f0cf4fdb10f9595e408
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@c98a9451a7349913f83668d83c0149443e6f1216
 
   cargo-vet:
     uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-vet.yml@c98a9451a7349913f83668d83c0149443e6f1216
