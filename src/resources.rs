@@ -141,7 +141,12 @@ mod tests {
         let v = read(json!({"uri": "noyalib://tools"})).unwrap();
         let text = v["contents"][0]["text"].as_str().unwrap();
         let parsed: JsonValue = serde_json::from_str(text).unwrap();
-        assert_eq!(parsed["tools"].as_array().unwrap().len(), 2);
+        // Mirrors the live tool registry (count-agnostic so adding a tool
+        // does not break this resource test).
+        assert_eq!(
+            parsed["tools"].as_array().unwrap().len(),
+            tools::descriptors().len()
+        );
     }
 
     #[test]
