@@ -9,7 +9,7 @@
 //! `cst::Document` so edits round-trip with comments, indentation,
 //! and sibling entries preserved byte-for-byte.
 
-use noyalib::cst::parse_document;
+use noyalib::cst::{parse_document, parse_stream};
 use serde_json::{Value as JsonValue, json};
 use std::fs;
 
@@ -97,6 +97,55 @@ pub fn descriptors() -> Vec<JsonValue> {
                 "required": ["file", "path", "value"]
             }
         }),
+        json!({
+            "name": "noyalib_set_multidoc",
+            "title": "Write a YAML value in one document of a multi-doc stream (lossless)",
+            // Same write semantics as noyalib_set, but targets one
+            // document of a `---`-separated multi-document YAML stream by
+            // index: not read-only, destructive (replaces content in
+            // place), idempotent, and open-world (touches the filesystem).
+            "annotations": {
+                "title": "Write a YAML value in one document of a multi-doc stream (lossless)",
+                "readOnlyHint": false,
+                "destructiveHint": true,
+                "idempotentHint": true,
+                "openWorldHint": true
+            },
+            "description": "Set the YAML value at a dotted/indexed path within \
+                a single document of a multi-document (`---`-separated) YAML \
+                stream, selected by zero-based document index. Only the touched \
+                span of that one document is rewritten; every other document, \
+                comment, blank line and separator is preserved byte-for-byte \
+                (written atomically). Use `noyalib_set` for a single-document \
+                file. On a parse error or out-of-range index the file is left \
+                unchanged.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Path to the multi-document YAML file on disk."
+                    },
+                    "doc_index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Zero-based index of the document within \
+                            the `---`-separated stream to modify."
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Dotted/indexed path into the selected document."
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "Replacement value as a YAML fragment. Must \
+                            parse in the target position; the file is left \
+                            unchanged on parse error."
+                    }
+                },
+                "required": ["file", "doc_index", "path", "value"]
+            }
+        }),
     ]
 }
 
@@ -112,6 +161,7 @@ pub fn call(params: JsonValue) -> Result<JsonValue, (i32, String)> {
     match name {
         "noyalib_get" => tool_get(&args),
         "noyalib_set" => tool_set(&args),
+        "noyalib_set_multidoc" => tool_set_multidoc(&args),
         _ => Err((-32601, format!("unknown tool: {name}"))),
     }
 }
@@ -148,6 +198,41 @@ fn tool_set(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
         .map_err(|e| (-32000, format!("write {file}: {e}")))?;
     Ok(ok_text(format!(
         "set {path} = {value} in {file} (lossless: comments and formatting preserved)"
+    )))
+}
+
+fn tool_set_multidoc(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+    let file = arg_str(args, "file")?;
+    let doc_index = args
+        .get("doc_index")
+        .and_then(JsonValue::as_u64)
+        .ok_or_else(|| (-32602, "missing integer argument: doc_index".to_string()))?
+        as usize;
+    let path = arg_str(args, "path")?;
+    let value = arg_str(args, "value")?;
+    let src = fs::read_to_string(file).map_err(|e| (-32000, format!("read {file}: {e}")))?;
+    // parse_stream keeps each `---`-delimited document as its own
+    // lossless Document, retaining its separator; concatenating their
+    // rendered forms reproduces the stream byte-for-byte, so editing one
+    // document leaves every other document untouched.
+    let mut docs = parse_stream(&src).map_err(|e| (-32001, format!("parse {file}: {e}")))?;
+    if doc_index >= docs.len() {
+        return Err((
+            -32602,
+            format!(
+                "doc_index {doc_index} out of range: stream has {} document(s)",
+                docs.len()
+            ),
+        ));
+    }
+    docs[doc_index]
+        .set(path, value)
+        .map_err(|e| (-32003, format!("set {path} = {value}: {e}")))?;
+    let out: String = docs.iter().map(ToString::to_string).collect();
+    write_atomic(file, out.as_bytes()).map_err(|e| (-32000, format!("write {file}: {e}")))?;
+    Ok(ok_text(format!(
+        "set {path} = {value} in document {doc_index} of {file} \
+         (lossless: other documents, comments and formatting preserved)"
     )))
 }
 
@@ -213,12 +298,13 @@ mod tests {
     // ── descriptors ────────────────────────────────────────────────
 
     #[test]
-    fn descriptors_lists_both_tools_with_input_schemas() {
+    fn descriptors_lists_all_tools_with_input_schemas() {
         let d = descriptors();
-        assert_eq!(d.len(), 2);
+        assert_eq!(d.len(), 3);
         let names: Vec<&str> = d.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"noyalib_get"));
         assert!(names.contains(&"noyalib_set"));
+        assert!(names.contains(&"noyalib_set_multidoc"));
         for tool in &d {
             assert!(tool["description"].is_string());
             assert_eq!(tool["inputSchema"]["type"].as_str(), Some("object"));
@@ -275,6 +361,104 @@ mod tests {
         );
         let updated = fs::read_to_string(&p).unwrap();
         assert_eq!(updated, "version: 2\n");
+        let _ = fs::remove_file(&p);
+    }
+
+    #[test]
+    fn call_routes_to_set_multidoc() {
+        let p = write_temp("call-set-multidoc", "name: first\n---\nname: second\n");
+        let v = call(json!({
+            "name": "noyalib_set_multidoc",
+            "arguments": {
+                "file": p.to_str().unwrap(),
+                "doc_index": 1,
+                "path": "name",
+                "value": "changed"
+            }
+        }))
+        .unwrap();
+        assert!(
+            v["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("document 1")
+        );
+        let updated = fs::read_to_string(&p).unwrap();
+        // First document is preserved byte-for-byte; only the second changed.
+        assert!(updated.contains("name: first"));
+        assert!(updated.contains("name: changed"));
+        assert!(!updated.contains("name: second"));
+        let _ = fs::remove_file(&p);
+    }
+
+    #[test]
+    fn set_multidoc_missing_doc_index_errors() {
+        let p = write_temp("md-no-index", "a: 1\n");
+        let err = tool_set_multidoc(&json!({
+            "file": p.to_str().unwrap(),
+            "path": "a",
+            "value": "2"
+        }))
+        .unwrap_err();
+        assert_eq!(err.0, -32602);
+        assert!(err.1.contains("doc_index"));
+        let _ = fs::remove_file(&p);
+    }
+
+    #[test]
+    fn set_multidoc_index_out_of_range_errors() {
+        let p = write_temp("md-oob", "a: 1\n---\nb: 2\n");
+        let err = tool_set_multidoc(&json!({
+            "file": p.to_str().unwrap(),
+            "doc_index": 9,
+            "path": "b",
+            "value": "3"
+        }))
+        .unwrap_err();
+        assert_eq!(err.0, -32602);
+        assert!(err.1.contains("out of range"));
+        // File left unchanged.
+        assert_eq!(fs::read_to_string(&p).unwrap(), "a: 1\n---\nb: 2\n");
+        let _ = fs::remove_file(&p);
+    }
+
+    #[test]
+    fn set_multidoc_unreadable_file_errors() {
+        let err = tool_set_multidoc(&json!({
+            "file": "/this/path/does/not/exist.yml",
+            "doc_index": 0,
+            "path": "a",
+            "value": "1"
+        }))
+        .unwrap_err();
+        assert_eq!(err.0, -32000);
+    }
+
+    #[test]
+    fn set_multidoc_unparseable_source_errors() {
+        let p = write_temp("md-parse", "a: [\n");
+        let err = tool_set_multidoc(&json!({
+            "file": p.to_str().unwrap(),
+            "doc_index": 0,
+            "path": "a",
+            "value": "1"
+        }))
+        .unwrap_err();
+        assert_eq!(err.0, -32001);
+        let _ = fs::remove_file(&p);
+    }
+
+    #[test]
+    fn set_multidoc_unknown_path_errors() {
+        let p = write_temp("md-badpath", "a: 1\n---\nb: 2\n");
+        let err = tool_set_multidoc(&json!({
+            "file": p.to_str().unwrap(),
+            "doc_index": 0,
+            "path": "missing.deep",
+            "value": "1"
+        }))
+        .unwrap_err();
+        assert_eq!(err.0, -32003);
         let _ = fs::remove_file(&p);
     }
 
