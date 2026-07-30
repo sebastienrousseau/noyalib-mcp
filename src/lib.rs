@@ -128,6 +128,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, json};
 
+pub mod prompts;
+pub mod resources;
 pub mod tools;
 
 /// JSON-RPC 2.0 request envelope. Method-specific parameters live
@@ -258,7 +260,9 @@ pub fn dispatch(method: &str, params: JsonValue) -> Result<JsonValue, (i32, Stri
                 "version": env!("CARGO_PKG_VERSION"),
             },
             "capabilities": {
-                "tools": {}
+                "tools": {},
+                "prompts": {},
+                "resources": {}
             }
         })),
         "initialized" | "notifications/initialized" => Ok(JsonValue::Null),
@@ -266,6 +270,17 @@ pub fn dispatch(method: &str, params: JsonValue) -> Result<JsonValue, (i32, Stri
             "tools": tools::descriptors()
         })),
         "tools/call" => tools::call(params),
+        "prompts/list" => Ok(json!({
+            "prompts": prompts::descriptors()
+        })),
+        "prompts/get" => prompts::get(params),
+        "resources/list" => Ok(json!({
+            "resources": resources::descriptors()
+        })),
+        "resources/templates/list" => Ok(json!({
+            "resourceTemplates": resources::templates()
+        })),
+        "resources/read" => resources::read(params),
         "ping" => Ok(JsonValue::Object(serde_json::Map::new())),
         other => Err((-32601, format!("method not found: {other}"))),
     }
@@ -374,6 +389,45 @@ mod tests {
         assert_eq!(v["protocolVersion"].as_str().unwrap(), "2025-06-18");
         assert_eq!(v["serverInfo"]["name"].as_str().unwrap(), "noyalib-mcp");
         assert!(v["capabilities"]["tools"].is_object());
+        assert!(v["capabilities"]["prompts"].is_object());
+        assert!(v["capabilities"]["resources"].is_object());
+    }
+
+    #[test]
+    fn dispatch_prompts_list_returns_prompt_array() {
+        let v = dispatch("prompts/list", JsonValue::Null).unwrap();
+        let prompts = v["prompts"].as_array().unwrap();
+        assert!(prompts.iter().any(|p| p["name"] == "format_and_lint_yaml"));
+    }
+
+    #[test]
+    fn dispatch_prompts_get_returns_messages() {
+        let v = dispatch("prompts/get", json!({"name": "format_and_lint_yaml"})).unwrap();
+        assert!(v["messages"].as_array().unwrap().len() == 1);
+    }
+
+    #[test]
+    fn dispatch_resources_list_returns_resource_array() {
+        let v = dispatch("resources/list", JsonValue::Null).unwrap();
+        let resources = v["resources"].as_array().unwrap();
+        assert!(resources.iter().any(|r| r["uri"] == "noyalib://tools"));
+    }
+
+    #[test]
+    fn dispatch_resources_templates_list_returns_templates() {
+        let v = dispatch("resources/templates/list", JsonValue::Null).unwrap();
+        let templates = v["resourceTemplates"].as_array().unwrap();
+        assert!(
+            templates
+                .iter()
+                .any(|t| t["uriTemplate"] == "noyalib://tool/{name}")
+        );
+    }
+
+    #[test]
+    fn dispatch_resources_read_returns_contents() {
+        let v = dispatch("resources/read", json!({"uri": "noyalib://error-codes"})).unwrap();
+        assert!(v["contents"].as_array().unwrap().len() == 1);
     }
 
     #[test]
