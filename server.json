@@ -6,7 +6,7 @@
     "url": "https://github.com/sebastienrousseau/noyalib-mcp",
     "source": "github"
   },
-  "version": "0.0.17",
+  "version": "0.0.18",
   "packages": [
     {
       "registryType": "oci",
