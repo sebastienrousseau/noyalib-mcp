@@ -31,22 +31,22 @@ concurrency:
 
 jobs:
   cargo-deny:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@c98a9451a7349913f83668d83c0149443e6f1216
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@76235c1a4306a2bbee8ece3c1147a9245da91abf
 
   cargo-vet:
     uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-vet.yml@c98a9451a7349913f83668d83c0149443e6f1216
 
   cargo-machete:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@c98a9451a7349913f83668d83c0149443e6f1216
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@76235c1a4306a2bbee8ece3c1147a9245da91abf
 
   reuse-lint:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@a472e147c5a563a3f07e1f0cf4fdb10f9595e408
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@76235c1a4306a2bbee8ece3c1147a9245da91abf
 
   docs-strict:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@a472e147c5a563a3f07e1f0cf4fdb10f9595e408
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@76235c1a4306a2bbee8ece3c1147a9245da91abf
 
   verify-signatures:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@a472e147c5a563a3f07e1f0cf4fdb10f9595e408
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@76235c1a4306a2bbee8ece3c1147a9245da91abf
 
   test-matrix:
     # `noyalib-mcp` is a stdio-JSON-RPC server; the OS matrix runs
@@ -63,7 +63,7 @@ jobs:
   coverage-gate:
     # mcp clears the core's 93/96/94 floor (measured 95.7/98.3/94.4).
     # No feature flags, so --all-features == default.
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-coverage.yml@c98a9451a7349913f83668d83c0149443e6f1216
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-coverage.yml@76235c1a4306a2bbee8ece3c1147a9245da91abf
     with:
       ignore-filename-regex: ''
       fail-under-functions: 96
@@ -74,6 +74,6 @@ jobs:
     # Verifies the declared 1.86.0 floor actually builds — the gate the
     # whole lockstep set was missing. mcp builds cleanly on 1.86
     # (no_std --lib, default, and clippy --lib -D warnings all pass).
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-msrv-core.yml@c98a9451a7349913f83668d83c0149443e6f1216
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-msrv-core.yml@76235c1a4306a2bbee8ece3c1147a9245da91abf
     with:
       toolchain: "1.86.0"
