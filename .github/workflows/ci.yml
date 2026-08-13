@@ -54,7 +54,7 @@ jobs:
     # the process-lifecycle + IPC surface differs materially across
     # host operating systems (line endings, path separators, signal
     # handling).
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@c98a9451a7349913f83668d83c0149443e6f1216
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@cbb6194143bd8bea396e6223cdd34072b6d6ecf9
 
   # ── A+ rigor parity with the core (added v0.0.17) ──────────────────
   # The satellite previously ran only the lint/test/supply-chain gates.
