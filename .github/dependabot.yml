@@ -42,6 +42,10 @@ updates:
     labels:
       - "ci"
       - "dependencies"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
   # npm — for the pkg/npm-wrapper/ package. Weekly bumps of
   # wrapper deps only.
