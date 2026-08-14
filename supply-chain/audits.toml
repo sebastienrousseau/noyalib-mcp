@@ -200,3 +200,9 @@ delta = "0.8.27 -> 0.8.55"
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.20 -> 1.0.23"
+
+[[trusted.libm]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2024-10-26"
+end = "2027-05-09"

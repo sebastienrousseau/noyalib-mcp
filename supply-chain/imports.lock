@@ -9,12 +9,22 @@ audited_as = "0.0.17"
 version = "0.0.19"
 audited_as = "0.0.18"
 
+[[unpublished.noyalib-mcp]]
+version = "0.0.22"
+audited_as = "0.0.18"
+
 [[publisher.bumpalo]]
 version = "3.20.3"
 when = "2026-05-22"
 user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
+
+[[publisher.libm]]
+version = "0.2.16"
+when = "2026-01-24"
+user-id = 55123
+user-login = "rust-lang-owner"
 
 [[audits.bytecode-alliance.wildcard-audits.bumpalo]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
