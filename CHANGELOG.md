@@ -1,0 +1,87 @@
+<!-- SPDX-FileCopyrightText: 2026 Noyalib -->
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+
+# Changelog
+
+All notable changes to `noyalib-mcp` are documented here.
+
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
+and versions in lockstep with the
+[`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
+see that repository's `CHANGELOG.md` for the release-wide notes.
+
+## [Unreleased]
+
+## [v0.0.22] - 2026-08-13
+
+Lockstep release with `noyalib` 0.0.22. No behaviour change in the server
+itself — see the core's `CHANGELOG.md` for what 0.0.22 carries (CRLF-aware
+CST splices, #261).
+
+**On the version jump.** The published sequence for this crate goes
+`0.0.18 → 0.0.22`. `0.0.19` was prepared on a release branch but never
+tagged or published; `0.0.20` and `0.0.21` were core-only releases that
+the satellites did not follow. Lockstep resumes here.
+
+### Fixed
+
+- **Registry manifests were internally inconsistent.** `server.json` and
+  `glama.json` carried `"version": "0.0.18"` while the ghcr image they
+  pointed at was still tagged `0.0.17` — the v0.0.18 manifest bump moved
+  the version field and not the image reference. Anyone resolving the
+  server through the MCP registry or Glama got the previous image. Both
+  now read `0.0.22`, and the release `validate` job's requirement that all
+  three agree with the tag is satisfied by construction.
+- **`pkg/npm-wrapper/package.json` had drifted to `0.0.15`** — seven
+  releases behind — so `npx @sebastienrousseau/noyalib-mcp` advertised a
+  stale version. Now `0.0.22`.
+
+### Changed
+
+- `noyalib` dependency pin `=0.0.18` → `=0.0.22`, with the matching
+  `cargo-vet` exemption moved alongside it.
+- Crate version → 0.0.22.
+
+### Security
+
+- **SHA-pinned the last floating GitHub Actions.** `publish-mcp.yml` and
+  `mcp-inspect.yml` were the only workflows here still referencing mutable
+  tags (`actions/checkout@v7`, `docker/build-push-action@v7`, …), so a
+  retagged action would have executed with ghcr push and `id-token`
+  rights. All eight now pin to the same commit SHAs `release.yml` already
+  used, so no new action versions are introduced. OpenSSF Scorecard
+  *Pinned-Dependencies*.
+
+  `dtolnay/rust-toolchain` resolves its toolchain from the ref name, so
+  the SHA pin carries an explicit `toolchain: stable` — matching how
+  `release.yml` already invokes it.
+
+- **Narrowed workflow-level token scope.** `publish-mcp.yml` granted
+  `id-token: write` and `packages: write` at the workflow level. Its single
+  job re-declares both, so the top level is now `contents: read` and the
+  elevated scopes no longer extend to any job added later. OpenSSF
+  Scorecard *Token-Permissions*.
+
+- Dropped the stale `RUSTSEC-2026-0173` ignore from `deny.toml`.
+  `cargo-deny` reported it as `advisory-not-detected`: `proc-macro-error2`
+  is not in this crate's graph on any platform, because it reaches
+  `noyalib` only through the optional `validator` feature, which this
+  crate does not enable.
+
+---
+
+## Earlier releases
+
+This file starts at `v0.0.22`. `noyalib-mcp` split out of the `noyalib`
+monorepo at **v0.0.13** ([ADR-0005](https://github.com/sebastienrousseau/noyalib/blob/main/doc/adr/0005-workspace-split.md))
+and released `v0.0.13` through `v0.0.18` without a crate-local changelog.
+Those releases are documented in:
+
+- the core's [`CHANGELOG.md`](https://github.com/sebastienrousseau/noyalib/blob/main/CHANGELOG.md),
+  which carries the release-wide notes for every lockstep version, and
+- this repository's [releases](https://github.com/sebastienrousseau/noyalib-mcp/releases)
+  and tags.
+
+They are deliberately not backfilled here rather than reconstructed after
+the fact.
