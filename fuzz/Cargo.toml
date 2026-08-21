@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright (c) 2026 Noyalib. All rights reserved.
+
+[package]
+name = "noyalib-mcp-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.noyalib-mcp]
+path = ".."
+
+[[bin]]
+name = "fuzz_handle_message"
+path = "fuzz_targets/fuzz_handle_message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_tool_call"
+path = "fuzz_targets/fuzz_tool_call.rs"
+test = false
+doc = false
+bench = false
