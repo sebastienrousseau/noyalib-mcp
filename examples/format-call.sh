@@ -12,7 +12,7 @@ set -euo pipefail
 YAML_DOC='# production config\nserver:\n  host:    api.example.com   # endpoint\n  port:8080\n'
 
 {
-    echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"format-demo","version":"0.0.1"}}}'
+    echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"format-demo","version":"0.0.1"}}}'
     echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
     printf '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"format","arguments":{"yaml":"%s"}}}\n' "$YAML_DOC"
 } | noyalib-mcp

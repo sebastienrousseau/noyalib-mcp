@@ -13,6 +13,45 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ## [Unreleased]
 
+### Added
+
+- **Dual-era protocol support — rebased on MCP 2026-07-28.** The
+  server now implements the stateless revision alongside the
+  handshake era: `server/discover` (a MUST, and the stdio
+  backward-compatibility probe) advertises
+  `supportedVersions: ["2026-07-28", "2025-06-18"]`; a per-request
+  `_meta` `io.modelcontextprotocol/protocolVersion` is honoured,
+  with an unsupported one answered by
+  `UnsupportedProtocolVersionError` (`-32022`, carrying the
+  `supported`/`requested` detail); every result is stamped
+  `resultType: "complete"` plus the server's identity in `_meta`;
+  and the cacheable results (`tools/list`, `prompts/list`,
+  `resources/list`, `resources/templates/list`, `resources/read`)
+  carry the required `ttlMs`/`cacheScope` fields. Legacy clients
+  are unaffected: `initialize`, `notifications/initialized` and
+  `ping` behave as before, and the extra result fields are ignored
+  by 2025-06-18 hosts.
+
+### Fixed
+
+- **`initialize` now negotiates instead of dictating.** The reply
+  hard-coded `protocolVersion: "2025-06-18"` and ignored the
+  client's requested version; per the 2025-06-18 negotiation rules
+  it now echoes a supported requested version and answers with
+  `2025-06-18` otherwise.
+- **The MCP conformance workflow never ran.** `mcp-inspect.yml`'s
+  path filters named monorepo paths (`crates/noyalib-mcp/**`) that
+  do not exist in this standalone repo, so no push or PR ever
+  triggered it. Filters now match the real layout, and the
+  workflow accepts `workflow_dispatch`.
+- **Documentation drift.** README, `doc/tools-reference.md`,
+  `doc/agent-integration.md` and the three `examples/*.sh`
+  handshakes advertised `2024-11-05` — a revision the server never
+  actually negotiated; the crate docs said "two tools" (there are
+  three) and an MSRV of 1.75.0 (the manifest says 1.86.0);
+  `glama.json` spelled the licence `Apache-2.0 OR MIT` where every
+  other manifest says `MIT OR Apache-2.0`.
+
 ## [v0.0.28] - 2026-08-23
 
 Lockstep release with the `noyalib` core. No changes in this crate; the
