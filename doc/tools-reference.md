@@ -6,7 +6,7 @@ invocations. This file is the user-facing reference; the
 authoritative source is
 [`crates/noyalib-mcp/src/tools.rs::descriptors()`](../src/tools.rs).
 
-The server speaks **MCP 2024-11-05**. Tool calls go through
+The server is **dual-era**: it speaks **MCP 2026-07-28** (stateless per-request `_meta`, `server/discover`) and answers the legacy **2025-06-18** `initialize` handshake. Tool calls go through
 `tools/call`; see the [MCP spec](https://spec.modelcontextprotocol.io/)
 for the JSON-RPC envelope.
 
@@ -200,7 +200,7 @@ serialised by the server — clients should coordinate externally
 
 ```json
 {
-  "protocolVersion": "2024-11-05",
+  "protocolVersion": "2025-06-18",
   "serverInfo": {
     "name": "noyalib-mcp",
     "version": "0.0.1"

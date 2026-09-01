@@ -93,7 +93,7 @@ Restart Continue. Tools appear in the agent's tool palette.
 
 ## Generic MCP client
 
-Any client that speaks MCP 2024-11-05 over stdio can use:
+Any client that speaks MCP over stdio can use (the server is dual-era: 2026-07-28 per-request `_meta` / `server/discover`, or the 2025-06-18 `initialize` handshake shown here):
 
 ```sh
 noyalib-mcp
@@ -112,7 +112,7 @@ them as "read/write YAML values at paths").
 For a CLI smoke test independent of any agent:
 
 ```sh
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}}}' \
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}' \
   | noyalib-mcp
 ```
 
@@ -120,7 +120,7 @@ Should respond with the server capabilities. Then:
 
 ```sh
 {
-  echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}}}'
+  echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}'
   echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
   echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 } | noyalib-mcp

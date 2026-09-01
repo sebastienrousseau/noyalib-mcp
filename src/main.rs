@@ -4,12 +4,16 @@
 //! `noyalib-mcp` — Model Context Protocol server exposing
 //! noyalib's lossless YAML editing to AI agents.
 //!
-//! Communicates via newline-delimited JSON-RPC 2.0 over stdio per
-//! the MCP 2025-06 spec. Two tools:
+//! Communicates via newline-delimited JSON-RPC 2.0 over stdio,
+//! dual-era per the MCP 2026-07-28 spec (stateless `_meta` +
+//! `server/discover` for modern clients, the `initialize`
+//! handshake for 2025-06-18 clients). Three tools:
 //!
 //! - `noyalib_get`: read the value at a path in a YAML file.
 //! - `noyalib_set`: set the value at a path, preserving every
 //!   untouched byte (comments, indentation, sibling entries).
+//! - `noyalib_set_multidoc`: `noyalib_set` for one document of a
+//!   `---`-separated stream.
 //!
 //! # Why this exists
 //!
@@ -57,8 +61,10 @@ USAGE:
   noyalib-mcp --help | -h       Print this help and exit.
 
 NOTES:
-  This binary speaks newline-delimited JSON-RPC 2.0 over stdio per
-  the MCP 2025-06 spec. It is not designed for interactive use —
+  This binary speaks newline-delimited JSON-RPC 2.0 over stdio,
+  dual-era per the MCP 2026-07-28 spec (modern per-request _meta
+  and server/discover, plus the legacy initialize handshake for
+  2025-06-18 clients). It is not designed for interactive use —
   configure your MCP-aware client (Claude, Cursor, Zed, …) to spawn
   it instead. Example for Claude:
 
