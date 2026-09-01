@@ -2,24 +2,8 @@
 # cargo-vet imports lock
 
 [[unpublished.noyalib-mcp]]
-version = "0.0.18"
-audited_as = "0.0.17"
-
-[[unpublished.noyalib-mcp]]
-version = "0.0.19"
-audited_as = "0.0.18"
-
-[[unpublished.noyalib-mcp]]
-version = "0.0.22"
-audited_as = "0.0.18"
-
-[[unpublished.noyalib-mcp]]
-version = "0.0.23"
-audited_as = "0.0.22"
-
-[[unpublished.noyalib-mcp]]
-version = "0.0.24"
-audited_as = "0.0.23"
+version = "0.0.29"
+audited_as = "0.0.28"
 
 [[publisher.bumpalo]]
 version = "3.20.3"
