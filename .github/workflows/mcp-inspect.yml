@@ -1,24 +1,26 @@
 name: MCP Protocol Conformance
 
+# The path filters previously named `crates/noyalib-mcp/**` and
+# friends — monorepo paths that do not exist in this standalone
+# repo — so the workflow never triggered on any push or PR here.
 on:
   push:
     branches: [main, "feat/**"]
     paths:
-      - "crates/noyalib-mcp/**"
-      - "crates/noyalib-core/**"
-      - "crates/noyalib-schema/**"
+      - "src/**"
+      - "tests/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/mcp-inspect.yml"
   pull_request:
     branches: [main]
     paths:
-      - "crates/noyalib-mcp/**"
-      - "crates/noyalib-core/**"
-      - "crates/noyalib-schema/**"
+      - "src/**"
+      - "tests/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/mcp-inspect.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
