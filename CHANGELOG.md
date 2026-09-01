@@ -15,6 +15,13 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ### Added
 
+- **CycloneDX SBOM in the release pipeline** (mirrors the core
+  repo). Releases now emit a machine-readable CycloneDX 1.5
+  `SBOM.cdx.json` — attested, sigstore-signed, optionally
+  GPG-signed, and attached to the GitHub Release — alongside the
+  human-readable `SBOM.txt`, which was never a machine-readable
+  SBOM format.
+
 - **Dual-era protocol support — rebased on MCP 2026-07-28.** The
   server now implements the stateless revision alongside the
   handshake era: `server/discover` (a MUST, and the stdio
@@ -33,6 +40,12 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   by 2025-06-18 hosts.
 
 ### Fixed
+
+- **A GPG-less release could not publish.** The release asset list
+  relied on `nullglob` to drop the `.asc` entries when GPG signing
+  is skipped, but `artifacts/SBOM.txt.asc` was a literal path, so
+  `gh release create` failed on the missing file for any fork
+  without the signing key. Real globs now (mirrors the core fix).
 
 - **`initialize` now negotiates instead of dictating.** The reply
   hard-coded `protocolVersion: "2025-06-18"` and ignored the
