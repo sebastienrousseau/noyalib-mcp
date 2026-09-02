@@ -216,16 +216,16 @@ through `jq -c .` if you want pretty-printed JSON responses.
 
 ## Verification
 
-The npm wrapper and the GHCR image both consume the signed
-binary attached to every GitHub Release. To verify the
-underlying binary before trusting it:
+GitHub Releases ship the crate archive and a CycloneDX SBOM,
+each with a sigstore bundle and checksums; the GHCR image is
+built from the tagged source. Pre-built binaries are not
+attached to releases yet. To verify a release artefact:
 
 ```bash
 COSIGN_EXPERIMENTAL=1 cosign verify-blob \
   --certificate-identity-regexp 'https://github.com/sebastienrousseau/noyalib-mcp/' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  --certificate <artefact>.pem \
-  --signature   <artefact>.sig \
+  --bundle <artefact>.bundle \
   <artefact>
 ```
 
