@@ -301,23 +301,22 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "noyalib"
-version = "0.0.29"
+version = "0.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f102aea73ec3023f33cb904bcc59b8f2ac91bce8b77cbe16c14491d117c57b5e"
+checksum = "23d48ffd97a6485043e2d05849188ba375a990a856b3607ce55e585a36ecfbb1"
 dependencies = [
  "hashbrown",
  "indexmap",
  "libm",
  "memchr",
  "rustc-hash",
- "serde",
  "serde_core",
  "smallvec",
 ]
 
 [[package]]
 name = "noyalib-mcp"
-version = "0.0.29"
+version = "0.0.30"
 dependencies = [
  "criterion",
  "noyalib",
