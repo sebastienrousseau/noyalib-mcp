@@ -13,6 +13,14 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Repository layout, Phase 1 of the family structure plan**:
+  `doc/` renamed to `docs/`, `DEVELOPMENT.md` added as the developer
+  entry point, `.editorconfig` / `.markdownlint.yaml` /
+  `.codespellrc` land with a per-push `docs-lint` CI gate consuming
+  the core repo's shared-docs-lint.yml.
+
 ## [v0.0.29] - 2026-09-01
 
 ### Added
@@ -59,8 +67,8 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   do not exist in this standalone repo, so no push or PR ever
   triggered it. Filters now match the real layout, and the
   workflow accepts `workflow_dispatch`.
-- **Documentation drift.** README, `doc/tools-reference.md`,
-  `doc/agent-integration.md` and the three `examples/*.sh`
+- **Documentation drift.** README, `docs/tools-reference.md`,
+  `docs/agent-integration.md` and the three `examples/*.sh`
   handshakes advertised `2024-11-05` — a revision the server never
   actually negotiated; the crate docs said "two tools" (there are
   three) and an MSRV of 1.75.0 (the manifest says 1.86.0);
@@ -239,7 +247,7 @@ the satellites did not follow. Lockstep resumes here.
 ## Earlier releases
 
 This file starts at `v0.0.22`. `noyalib-mcp` split out of the `noyalib`
-monorepo at **v0.0.13** ([ADR-0005](https://github.com/sebastienrousseau/noyalib/blob/main/doc/adr/0005-workspace-split.md))
+monorepo at **v0.0.13** ([ADR-0005](https://github.com/sebastienrousseau/noyalib/blob/main/docs/adr/0005-workspace-split.md))
 and released `v0.0.13` through `v0.0.18` without a crate-local changelog.
 Those releases are documented in:
 
