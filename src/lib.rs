@@ -30,7 +30,7 @@
 //! The MCP wire surface is text-only JSON-RPC and pulls no
 //! nightly-only deps. CI verifies the floor via the
 //! `Per-crate MSRV` workflow job. See the workspace
-//! [`POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/doc/POLICIES.md#1-msrv-minimum-supported-rust-version)
+//! [`POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/docs/POLICIES.md#1-msrv-minimum-supported-rust-version)
 //! for the bump policy.
 //!
 //! # Panics
@@ -45,7 +45,7 @@
 //! Tool calls return JSON-RPC error envelopes per the
 //! [MCP specification](https://modelcontextprotocol.io). The
 //! error code taxonomy lives in
-//! [`crates/noyalib-mcp/doc/tools-reference.md`](https://github.com/sebastienrousseau/noyalib/blob/main/crates/noyalib-mcp/doc/tools-reference.md):
+//! [`docs/tools-reference.md`](https://github.com/sebastienrousseau/noyalib-mcp/blob/main/docs/tools-reference.md):
 //! `-32000` (file I/O), `-32001` (parse), `-32002` (path not
 //! found), `-32003` (set), `-32602` (missing arg), `-32601`
 //! (unknown method).
@@ -108,16 +108,16 @@
 //! surface (`handle_message`, `dispatch`, `error_str`,
 //! `Request`, `Response`, `ErrorResponse`, `HandleOutcome`) is
 //! covered by the workspace SemVer policy in
-//! [`POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/doc/POLICIES.md#2-semver--api-stability).
+//! [`POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/docs/POLICIES.md#2-semver--api-stability).
 //! `cargo-semver-checks` runs in CI on every PR.
 //!
 //! # Documentation
 //!
 //! - **Engineering policies** — workspace
-//!   [`POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/doc/POLICIES.md).
+//!   [`POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/docs/POLICIES.md).
 //! - **MCP specification**: <https://modelcontextprotocol.io>.
 //! - **Tools reference** (input schemas, error codes):
-//!   [`doc/tools-reference.md`](https://github.com/sebastienrousseau/noyalib/blob/main/crates/noyalib-mcp/doc/tools-reference.md).
+//!   [`docs/tools-reference.md`](https://github.com/sebastienrousseau/noyalib/blob/main/crates/noyalib-mcp/doc/tools-reference.md).
 //! - **Host configurations** (Claude Desktop, Cursor,
 //!   Continue.dev, Zed, hosted gateways):
 //!   [`examples/`](https://github.com/sebastienrousseau/noyalib/tree/main/crates/noyalib-mcp/examples).

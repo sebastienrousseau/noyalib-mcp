@@ -62,7 +62,7 @@ docker run --rm -i ghcr.io/sebastienrousseau/noyalib-mcp:latest
 > released in strict lockstep with the parent
 > [`noyalib`](https://github.com/sebastienrousseau/noyalib) at
 > the same version. See
-> [ADR-0005](https://github.com/sebastienrousseau/noyalib/blob/main/doc/adr/0005-workspace-split.md)
+> [ADR-0005](https://github.com/sebastienrousseau/noyalib/blob/main/docs/adr/0005-workspace-split.md)
 > for the rationale and rollback recipe.
 
 Both consume the same signed binary attached to every GitHub
@@ -216,16 +216,16 @@ through `jq -c .` if you want pretty-printed JSON responses.
 
 ## Verification
 
-The npm wrapper and the GHCR image both consume the signed
-binary attached to every GitHub Release. To verify the
-underlying binary before trusting it:
+GitHub Releases ship the crate archive and a CycloneDX SBOM,
+each with a sigstore bundle and checksums; the GHCR image is
+built from the tagged source. Pre-built binaries are not
+attached to releases yet. To verify a release artefact:
 
 ```bash
 COSIGN_EXPERIMENTAL=1 cosign verify-blob \
   --certificate-identity-regexp 'https://github.com/sebastienrousseau/noyalib-mcp/' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  --certificate <artefact>.pem \
-  --signature   <artefact>.sig \
+  --bundle <artefact>.bundle \
   <artefact>
 ```
 
@@ -268,7 +268,7 @@ the number we verify. The MCP wire surface itself is text-only
 JSON-RPC and pulls no nightly-only deps. CI verifies the floor on every
 PR via the `Per-crate MSRV` workflow job. The bump policy
 lives in
-[`doc/POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/doc/POLICIES.md#1-msrv-minimum-supported-rust-version).
+[`docs/POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/docs/POLICIES.md#1-msrv-minimum-supported-rust-version).
 
 **Tier-1 platforms** (CI-verified each PR): `aarch64-apple-darwin`,
 `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`. The
@@ -280,15 +280,22 @@ MOVEFILE_WRITE_THROUGH)` semantics.
 
 ## Documentation
 
+The four entry points, identical across every repo in the family:
+
+- **[User Manual](https://sebastienrousseau.github.io/noyalib/manual/)** — the rendered book: user guide, migrations, architecture, policies, ADRs
+- **[API reference](https://docs.rs/noyalib-mcp)** — rustdoc on docs.rs
+- **[Developer docs](DEVELOPMENT.md)** — this repo's dev entry point, pointing at the family guide
+- **[Ecosystem map](https://github.com/sebastienrousseau/noyalib/blob/main/docs/ECOSYSTEM.md)** — the six crates, the lockstep model, the scorecard
+
 - **Engineering policies** (MSRV, SemVer, security, performance, concurrency, platform support, feature flags):
-  [`doc/POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/doc/POLICIES.md)
+  [`docs/POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/docs/POLICIES.md)
 - **Security policy**:
   [`SECURITY.md`](https://github.com/sebastienrousseau/noyalib/blob/main/SECURITY.md)
 - **API reference**: <https://docs.rs/noyalib-mcp>
 - **Tools reference (input schemas + error codes)**:
-  [`doc/tools-reference.md`](https://github.com/sebastienrousseau/noyalib/blob/main/crates/noyalib-mcp/doc/tools-reference.md)
+  [`docs/tools-reference.md`](https://github.com/sebastienrousseau/noyalib/blob/main/crates/noyalib-mcp/doc/tools-reference.md)
 - **Agent integration (Claude Desktop, Cursor, Continue.dev)**:
-  [`doc/agent-integration.md`](https://github.com/sebastienrousseau/noyalib/blob/main/crates/noyalib-mcp/doc/agent-integration.md)
+  [`docs/agent-integration.md`](https://github.com/sebastienrousseau/noyalib/blob/main/crates/noyalib-mcp/doc/agent-integration.md)
 - **MCP specification**: <https://modelcontextprotocol.io>
 - **Workspace README**:
   <https://github.com/sebastienrousseau/noyalib#readme>
