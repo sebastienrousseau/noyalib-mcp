@@ -25,6 +25,7 @@
 ## Contents
 
 - [Install](#install) — Cargo, npx, Docker
+- [Requirements](#requirements) — toolchain floor, platforms, the core pin
 - [Quick Start](#quick-start) — JSON-RPC handshake
 - [Why this approach?](#why-this-approach) — design rationale
 - [Connect](#connect) — per-client configuration
@@ -70,6 +71,20 @@ Release. See [Verification](#verification) for the verify
 commands.
 
 ---
+
+## Requirements
+
+- **Rust 1.86.0 or newer** to build from source: `rust-version` in
+  the manifest, enforced by the `msrv-core` CI job on every push.
+- **Any tier-1 platform.** CI runs the tests on Linux, macOS, and
+  Windows with the stable, beta, and nightly toolchains; stable is the
+  gate, beta and nightly are early warning.
+- **The matching core.** This crate pins `noyalib` at the identical
+  `=0.0.X` and releases in lockstep with it; Cargo resolves that pin
+  for you.
+- **An MCP client** speaking JSON-RPC 2.0 over stdio (2025-06-18 or
+  2026-07-28 protocol eras); the README's Connect section lists tested
+  hosts.
 
 ## Quick Start
 
