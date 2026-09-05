@@ -1,6 +1,6 @@
 [package]
 name = "noyalib-mcp"
-version = "0.0.33"
+version = "0.0.34"
 edition = "2024"
 rust-version = "1.86.0"
 license = "MIT OR Apache-2.0"
@@ -24,7 +24,7 @@ path = "src/main.rs"
 [dependencies]
 # Strict-lockstep versioning (ADR-0005). Dependabot ignores this
 # dep; bumps are coordinated with the parent noyalib release tag.
-noyalib = { version = "=0.0.33", default-features = false, features = ["std"] }
+noyalib = { version = "=0.0.34", default-features = false, features = ["std"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
@@ -38,3 +38,12 @@ harness = false
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
+
+# ── Pre-release resolution ─────────────────────────────────────────
+# The `=0.0.34` lockstep pin resolves only against the *published*
+# core. Until that release lands on crates.io, resolve it from the
+# core's release branch so CI and local builds work. REMOVE at the
+# v0.0.34 cut — the release validation must refuse to tag while this
+# section is present.
+[patch.crates-io]
+noyalib = { git = "https://github.com/sebastienrousseau/noyalib", branch = "feat/v0.0.34" }
