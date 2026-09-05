@@ -22,6 +22,13 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   `arbitrary` feature, and an unterminated-verbatim-tag parser fix
   (core #396). No local code change unless listed below.
 
+### Fixed
+
+- `noyalib_get` on a key whose value is empty (`key:` with nothing
+  after it, an implicit null) returns the empty source slice instead
+  of a "path not found" error; a missing key still errors. Found by
+  driving the yaml-test-suite through the server (case 7W2P).
+
 ## [v0.0.33] - 2026-09-05
 
 ### Changed
