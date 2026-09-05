@@ -182,6 +182,11 @@ fn tool_get(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
     let doc = parse_document(&src).map_err(|e| (-32001, format!("parse {file}: {e}")))?;
     match doc.get(path) {
         Some(value) => Ok(ok_text(value.to_string())),
+        // `get` yields `None` for an implicit null (`key:` with no
+        // value) as well as for a missing path; the key span tells
+        // the two apart so an empty value reads as its (empty) source
+        // slice instead of a spurious "not found".
+        None if doc.key_span(path).is_some() => Ok(ok_text(String::new())),
         None => Err((-32002, format!("path not found in {file}: {path}"))),
     }
 }
@@ -338,6 +343,28 @@ mod tests {
         .unwrap();
         let text = v["content"][0]["text"].as_str().unwrap();
         assert_eq!(text, "noyalib");
+        let _ = fs::remove_file(&p);
+    }
+
+    #[test]
+    fn get_of_an_empty_value_is_the_empty_slice_not_an_error() {
+        // yaml-test-suite 7W2P: `? a` / `c:` are present keys with an
+        // implicit null value. They must not read as "path not found".
+        let p = write_temp("call-get-empty", "a:\nb: 1\nc:\n");
+        for key in ["a", "c"] {
+            let v = call(json!({
+                "name": "noyalib_get",
+                "arguments": { "file": p.to_str().unwrap(), "path": key }
+            }))
+            .unwrap();
+            assert_eq!(v["content"][0]["text"].as_str().unwrap(), "");
+        }
+        let err = call(json!({
+            "name": "noyalib_get",
+            "arguments": { "file": p.to_str().unwrap(), "path": "missing" }
+        }))
+        .unwrap_err();
+        assert_eq!(err.0, -32002);
         let _ = fs::remove_file(&p);
     }
 

@@ -13,6 +13,26 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ## [Unreleased]
 
+## [v0.0.34] - 2026-09-05
+
+### Changed
+
+- Lockstep release with noyalib 0.0.34: property tests for the emitter
+  and path grammar, structure-aware and alloc-only fuzzing, the
+  `arbitrary` feature, and an unterminated-verbatim-tag parser fix
+  (core #396). No local code change unless listed below.
+- yaml-test-suite conformance gate: `tests/yaml_test_suite.rs` drives all
+  406 official cases through this crate's own entry point and CI runs it
+  via the family's shared `yaml-test-suite` workflow, so the surface
+  cannot drift from the core (which passes 406/406).
+
+### Fixed
+
+- `noyalib_get` on a key whose value is empty (`key:` with nothing
+  after it, an implicit null) returns the empty source slice instead
+  of a "path not found" error; a missing key still errors. Found by
+  driving the yaml-test-suite through the server (case 7W2P).
+
 ## [v0.0.33] - 2026-09-05
 
 ### Changed
