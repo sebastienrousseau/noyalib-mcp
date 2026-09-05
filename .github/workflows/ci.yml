@@ -31,24 +31,24 @@ concurrency:
 
 jobs:
   docs-lint:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-docs-lint.yml@a74001c96bed9c22510ae67f55d319040a192cf4
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-docs-lint.yml@69dce892f18b0db3ae94c17a9c3c9a65e3327fe8
   cargo-deny:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@0a0c75faefdd2e1ba5ea06d4fe9b372154a99a6e
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@69dce892f18b0db3ae94c17a9c3c9a65e3327fe8
 
   cargo-vet:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-vet.yml@0a0c75faefdd2e1ba5ea06d4fe9b372154a99a6e
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-vet.yml@69dce892f18b0db3ae94c17a9c3c9a65e3327fe8
 
   cargo-machete:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@0a0c75faefdd2e1ba5ea06d4fe9b372154a99a6e
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@69dce892f18b0db3ae94c17a9c3c9a65e3327fe8
 
   reuse-lint:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@0a0c75faefdd2e1ba5ea06d4fe9b372154a99a6e
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@69dce892f18b0db3ae94c17a9c3c9a65e3327fe8
 
   docs-strict:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@0a0c75faefdd2e1ba5ea06d4fe9b372154a99a6e
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@69dce892f18b0db3ae94c17a9c3c9a65e3327fe8
 
   verify-signatures:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@0a0c75faefdd2e1ba5ea06d4fe9b372154a99a6e
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@69dce892f18b0db3ae94c17a9c3c9a65e3327fe8
 
   test-matrix:
     # `noyalib-mcp` is a stdio-JSON-RPC server; the OS matrix runs
@@ -56,7 +56,7 @@ jobs:
     # the process-lifecycle + IPC surface differs materially across
     # host operating systems (line endings, path separators, signal
     # handling).
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@0a0c75faefdd2e1ba5ea06d4fe9b372154a99a6e
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@69dce892f18b0db3ae94c17a9c3c9a65e3327fe8
 
   # ── A+ rigor parity with the core (added v0.0.17) ──────────────────
   # The satellite previously ran only the lint/test/supply-chain gates.
@@ -65,7 +65,7 @@ jobs:
   coverage-gate:
     # mcp clears the core's 93/96/94 floor (measured 95.7/98.3/94.4).
     # No feature flags, so --all-features == default.
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-coverage.yml@0a0c75faefdd2e1ba5ea06d4fe9b372154a99a6e
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-coverage.yml@69dce892f18b0db3ae94c17a9c3c9a65e3327fe8
     with:
       ignore-filename-regex: ''
       fail-under-functions: 96
@@ -76,6 +76,39 @@ jobs:
     # Verifies the declared 1.86.0 floor actually builds — the gate the
     # whole lockstep set was missing. mcp builds cleanly on 1.86
     # (no_std --lib, default, and clippy --lib -D warnings all pass).
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-msrv-core.yml@0a0c75faefdd2e1ba5ea06d4fe9b372154a99a6e
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-msrv-core.yml@69dce892f18b0db3ae94c17a9c3c9a65e3327fe8
     with:
       toolchain: "1.86.0"
+
+  fuzz-regression:
+    # Every fuzz target builds on every push, and the seed corpus (plus
+    # any fixed-bug regression inputs under fuzz/regressions/<target>/)
+    # is replayed with -runs=0, so a fixed finding stays fixed.
+    name: fuzz-regression
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target-fuzz
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: nightly
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: ". -> target-fuzz"
+          key: fuzz-regression
+      - run: cargo install --locked cargo-fuzz
+      - name: Build every fuzz target
+        run: cargo +nightly fuzz build
+      - name: Replay seed corpus and fixed-bug regressions
+        run: |
+          set -euo pipefail
+          cd fuzz
+          for f in fuzz_targets/*.rs; do
+            t=$(basename "$f" .rs)
+            dirs=(corpus/seed)
+            [ -d "regressions/$t" ] && dirs+=("regressions/$t")
+            echo "── replaying $t against: ${dirs[*]}"
+            cargo +nightly fuzz run "$t" "${dirs[@]}" -- -runs=0
+          done

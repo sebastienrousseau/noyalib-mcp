@@ -25,6 +25,7 @@
 ## Contents
 
 - [Install](#install) — Cargo, npx, Docker
+- [Requirements](#requirements) — toolchain floor, platforms, the core pin
 - [Quick Start](#quick-start) — JSON-RPC handshake
 - [Why this approach?](#why-this-approach) — design rationale
 - [Connect](#connect) — per-client configuration
@@ -70,6 +71,20 @@ Release. See [Verification](#verification) for the verify
 commands.
 
 ---
+
+## Requirements
+
+- **Rust 1.86.0 or newer** to build from source: `rust-version` in
+  the manifest, enforced by the `msrv-core` CI job on every push.
+- **Any tier-1 platform.** CI runs the tests on Linux, macOS, and
+  Windows with the stable, beta, and nightly toolchains; stable is the
+  gate, beta and nightly are early warning.
+- **The matching core.** This crate pins `noyalib` at the identical
+  `=0.0.X` and releases in lockstep with it; Cargo resolves that pin
+  for you.
+- **An MCP client** speaking JSON-RPC 2.0 over stdio (2025-06-18 or
+  2026-07-28 protocol eras); the README's Connect section lists tested
+  hosts.
 
 ## Quick Start
 
@@ -282,7 +297,7 @@ MOVEFILE_WRITE_THROUGH)` semantics.
 
 The four entry points, identical across every repo in the family:
 
-- **[User Manual](https://sebastienrousseau.github.io/noyalib/manual/)** — the rendered book: user guide, migrations, architecture, policies, ADRs
+- **[User Manual](https://sebastienrousseau.github.io/noyalib-mcp/manual/)** — this crate's rendered book: its guides, architecture, and release notes; the family manual for the core library is at [https://sebastienrousseau.github.io/noyalib/manual/](https://sebastienrousseau.github.io/noyalib/manual/)
 - **[API reference](https://docs.rs/noyalib-mcp)** — rustdoc on docs.rs
 - **[Developer docs](DEVELOPMENT.md)** — this repo's dev entry point, pointing at the family guide
 - **[Ecosystem map](https://github.com/sebastienrousseau/noyalib/blob/main/docs/ECOSYSTEM.md)** — the six crates, the lockstep model, the scorecard
@@ -293,9 +308,9 @@ The four entry points, identical across every repo in the family:
   [`SECURITY.md`](https://github.com/sebastienrousseau/noyalib/blob/main/SECURITY.md)
 - **API reference**: <https://docs.rs/noyalib-mcp>
 - **Tools reference (input schemas + error codes)**:
-  [`docs/tools-reference.md`](https://github.com/sebastienrousseau/noyalib/blob/main/crates/noyalib-mcp/doc/tools-reference.md)
+  [`docs/tools-reference.md`](docs/tools-reference.md)
 - **Agent integration (Claude Desktop, Cursor, Continue.dev)**:
-  [`docs/agent-integration.md`](https://github.com/sebastienrousseau/noyalib/blob/main/crates/noyalib-mcp/doc/agent-integration.md)
+  [`docs/agent-integration.md`](docs/agent-integration.md)
 - **MCP specification**: <https://modelcontextprotocol.io>
 - **Workspace README**:
   <https://github.com/sebastienrousseau/noyalib#readme>

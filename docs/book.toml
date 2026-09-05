@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Noyalib
+# SPDX-License-Identifier: MIT OR Apache-2.0
+[book]
+title = "The noyalib-mcp Manual"
+description = "A Model Context Protocol server giving AI agents lossless YAML editing."
+authors = ["Sebastien Rousseau"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "../target-book"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/sebastienrousseau/noyalib-mcp"
+edit-url-template = "https://github.com/sebastienrousseau/noyalib-mcp/edit/main/docs/{path}"
+site-url = "/noyalib-mcp/manual/"

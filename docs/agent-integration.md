@@ -177,7 +177,7 @@ green tree preserves trivia by construction.
   client-side path sanitisation matters, sanitise before calling.
 
 For the full security policy see the workspace
-[SECURITY.md](../../../SECURITY.md).
+[SECURITY.md](../SECURITY.md).
 
 ## Troubleshooting
 
