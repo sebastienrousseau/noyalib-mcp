@@ -1,0 +1,14 @@
+{
+  "name": "noyalib-mcp",
+  "image": "mcr.microsoft.com/devcontainers/rust:1",
+  "postCreateCommand": "cargo install --locked cargo-deny cargo-vet && pip3 install --user codespell reuse && make",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "DavidAnson.vscode-markdownlint"
+      ]
+    }
+  }
+}

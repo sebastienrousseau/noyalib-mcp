@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Noyalib
+# SPDX-License-Identifier: MIT OR Apache-2.0
+cff-version: 1.2.0
+message: "If you use noyalib-mcp in your work, please cite it as below."
+title: noyalib-mcp
+type: software
+authors:
+  - family-names: Rousseau
+    given-names: Sebastien
+    email: sebastian.rousseau@gmail.com
+repository-code: "https://github.com/sebastienrousseau/noyalib-mcp"
+url: "https://github.com/sebastienrousseau/noyalib-mcp"
+license: "Apache-2.0 OR MIT"
+version: 0.0.33
+date-released: "2026-09-05"
+abstract: >-
+  Model Context Protocol server exposing lossless YAML editing to AI agents. Part of the noyalib YAML 1.2 family for Rust, released in
+  lockstep with the core library.
