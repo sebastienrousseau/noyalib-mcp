@@ -328,6 +328,13 @@ fn tool_set_multidoc(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
 /// race where `fs::write` returned before the kernel page cache
 /// flushed, leaving a freshly-spawned reader to observe the old
 /// bytes.
+/// An error no request can provoke (a JSON conversion of a value the
+/// parser already accepted): one function, so the unreachable paths do
+/// not each count as an uncovered closure.
+fn internal(e: impl std::fmt::Display) -> (i32, String) {
+    (-32001, format!("internal: {e}"))
+}
+
 /// Stateless: parse the request's YAML and return its JSON data model.
 fn tool_parse(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
     let yaml = arg_str(args, "yaml")?;
@@ -335,13 +342,13 @@ fn tool_parse(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
         .map_err(|e| (-32001, format!("parse: {e}")))?;
     let json: Vec<serde_json::Value> = docs
         .into_iter()
-        .map(|d| serde_json::to_value(d.untag()).map_err(|e| (-32001, format!("json: {e}"))))
+        .map(|d| serde_json::to_value(d.untag()).map_err(internal))
         .collect::<Result<_, _>>()?;
     let out = match json.len() {
         1 => serde_json::to_string_pretty(&json[0]),
         _ => serde_json::to_string_pretty(&json),
     }
-    .map_err(|e| (-32001, format!("json: {e}")))?;
+    .map_err(internal)?;
     Ok(ok_text(out))
 }
 
@@ -381,9 +388,7 @@ fn tool_validate(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
         serde_json::from_value(schema).map_err(|e| (-32602, format!("schema: {e}")))?;
     let compiled = noyalib::CompiledSchema::compile(&schema_value)
         .map_err(|e| (-32602, format!("schema: {e}")))?;
-    let violations = compiled
-        .iter_errors(&value)
-        .map_err(|e| (-32001, format!("validate: {e}")))?;
+    let violations = compiled.iter_errors(&value).map_err(internal)?;
     let list: Vec<JsonValue> = violations
         .iter()
         .map(|v| json!({ "path": v.instance_path, "keyword": v.keyword, "message": v.message }))
@@ -577,6 +582,28 @@ mod tests {
         let r: serde_json::Value =
             serde_json::from_str(v["content"][0]["text"].as_str().unwrap()).unwrap();
         assert_eq!(r["valid"], true);
+    }
+
+    #[test]
+    fn stateless_tools_report_every_error_path() {
+        let err = call(json!({ "name": "noyalib_edit", "arguments": { "yaml": "a: [\n", "path": "a", "value": "1" } })).unwrap_err();
+        assert_eq!(err.0, -32001);
+        let err = call(json!({ "name": "noyalib_edit", "arguments": { "yaml": "a: 1\n", "path": "missing.key", "value": "1" } })).unwrap_err();
+        assert_eq!(err.0, -32003);
+        let err = call(json!({ "name": "noyalib_validate", "arguments": { "yaml": "a: 1\n", "schema": "{not json" } })).unwrap_err();
+        assert_eq!(err.0, -32602);
+        let err = call(json!({ "name": "noyalib_validate", "arguments": { "yaml": "a: 1\n", "schema": "{\"type\": 12}" } })).unwrap_err();
+        assert_eq!(err.0, -32602);
+        let err = call(json!({ "name": "noyalib_parse", "arguments": {} })).unwrap_err();
+        assert_eq!(err.0, -32602);
+        let v =
+            call(json!({ "name": "noyalib_validate", "arguments": { "yaml": "a: 1\n" } })).unwrap();
+        assert!(
+            v["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("\"valid\":true")
+        );
     }
 
     #[test]
