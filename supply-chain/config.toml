@@ -124,6 +124,10 @@ criteria = "safe-to-deploy"
 version = "0.3.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.noyalib]]
+version = "0.0.36"
+criteria = "safe-to-deploy"
+
 [[exemptions.noyalib-mcp]]
 version = "0.0.28"
 criteria = "safe-to-deploy"
