@@ -339,6 +339,17 @@ Sibling MCP servers by the same author — open-source, Apache-2.0 licensed, tar
 
 ---
 
+## Conformance
+
+Every push runs the official [yaml-test-suite](https://github.com/yaml/yaml-test-suite)
+through this server's tools, from the same vendored suite and the same core
+commit as the `noyalib` core: 195 of 195 addressable cases (the other 211 have
+no top-level key for `noyalib_get` to read; `noyalib_parse` sees all of them).
+A two-document configuration that uses most of YAML at once
+(`tests/fixtures/ultra-complex/`) parses to exactly its expected JSON through
+`noyalib_parse`. Details and the family table:
+[noyalib.com/conformance](https://noyalib.com/conformance/).
+
 ## License
 
 Dual-licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)
