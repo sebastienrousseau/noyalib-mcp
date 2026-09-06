@@ -97,15 +97,15 @@ version = "0.3.103"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema]]
-version = "0.52.1"
+version = "0.53.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema-regex]]
-version = "0.52.1"
+version = "0.53.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.jsonschema-value]]
-version = "0.52.1"
+version = "0.53.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.libc]]
@@ -122,10 +122,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.micromap]]
 version = "0.3.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.noyalib]]
-version = "0.0.35"
 criteria = "safe-to-deploy"
 
 [[exemptions.noyalib-mcp]]
@@ -197,7 +193,7 @@ version = "1.0.27"
 criteria = "safe-to-deploy"
 
 [[exemptions.referencing]]
-version = "0.52.1"
+version = "0.53.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.regex]]
