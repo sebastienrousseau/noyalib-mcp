@@ -220,3 +220,25 @@ fn tool_call_set_multidoc_locates_parse_errors_in_the_file() {
         "a: 1\n---\nb: 2\n---\nc: *nope\n"
     );
 }
+
+/// Document 2 of the core's ultra-complex fixture through
+/// `noyalib_parse`: the tool's text is exactly the expected JSON model.
+#[test]
+fn tool_call_parse_projects_the_ultra_complex_fixture_onto_json() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ultra-complex");
+    let yaml = std::fs::read_to_string(dir.join("valid.yaml")).unwrap();
+    let doc2 = &yaml[yaml.find("---\n# Document 2").expect("document 2")..];
+    let expected: Vec<Value> =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("valid.json")).unwrap()).unwrap();
+    let resp = round_trip(&[json!({
+        "jsonrpc": "2.0",
+        "method": "tools/call",
+        "params": { "name": "noyalib_parse", "arguments": { "yaml": doc2 } },
+        "id": 21
+    })]);
+    let text = resp[0]["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{}", resp[0]));
+    let got: Value = serde_json::from_str(text).expect("tool text is JSON");
+    assert_eq!(got, expected[1]);
+}
