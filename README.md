@@ -194,6 +194,9 @@ strings, so an agent's edits land on disk losslessly:
 
 - `noyalib_get` — Takes `{ file: string, path: string }`; returns the raw source fragment at the dotted/indexed path (e.g. `server.host`, `items[0].name`). No re-quoting; no canonicalisation.
 - `noyalib_set` — Takes `{ file: string, path: string, value: string }`; returns the file rewritten via the lossless CST so only the touched span changes; comments, blank lines, and sibling formatting survive byte-for-byte. The `value` is a YAML fragment (`0.0.2`, `"hello"`, `[1, 2, 3]`); a parse failure leaves the file unchanged.
+- `noyalib_parse` — Takes `{ yaml: string }`; returns the JSON data model of the text (tags stripped, a stream as an array). Stateless: nothing on disk is touched.
+- `noyalib_edit` — Takes `{ yaml: string, path: string, value: string }`; returns the whole text with that one value replaced losslessly. Stateless.
+- `noyalib_validate` — Takes `{ yaml: string, schema?: string }`; returns `valid` with either the parse error (line and column) or every JSON Schema violation with its path. Stateless.
 
 Each tool's full input schema lives in the response to
 `tools/list`. The server also handles the standard
