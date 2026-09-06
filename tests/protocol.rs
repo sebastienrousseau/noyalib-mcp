@@ -186,3 +186,37 @@ fn notification_gets_no_reply() {
     assert_eq!(resp.len(), 1, "notification must not produce a response");
     assert_eq!(resp[0]["id"], 1);
 }
+
+/// A parse error in a later document of a stream is reported at its
+/// position in the file, not in the document that failed (noyalib
+/// #407). The bad alias is on line 5 of the file and line 2 of its own
+/// document; the message must say line 5.
+#[test]
+fn tool_call_set_multidoc_locates_parse_errors_in_the_file() {
+    let path = tempfile("a: 1\n---\nb: 2\n---\nc: *nope\n");
+    let resp = round_trip(&[json!({
+        "jsonrpc": "2.0",
+        "method": "tools/call",
+        "params": {
+            "name": "noyalib_set_multidoc",
+            "arguments": {
+                "file": path.to_str().unwrap(),
+                "doc_index": 0,
+                "path": "a",
+                "value": "2"
+            }
+        },
+        "id": 14
+    })]);
+    let text = serde_json::to_string(&resp).unwrap();
+    assert!(
+        text.contains("line 5, column 4"),
+        "expected the file position: {text}"
+    );
+    assert!(!text.contains("line 2, column 4"), "{text}");
+    // The file is left untouched.
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "a: 1\n---\nb: 2\n---\nc: *nope\n"
+    );
+}
