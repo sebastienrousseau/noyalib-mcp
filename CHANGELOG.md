@@ -22,6 +22,16 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   the family gaps closed in this cycle. No local code change unless
   listed below.
 
+### Added
+
+- Three stateless tools that take content in the request and touch
+  nothing on disk, the shape the 2026-07-28 MCP specification's
+  stateless deployments want: `noyalib_parse` (YAML text to its JSON
+  data model, streams as arrays), `noyalib_edit` (set a value in the
+  given text losslessly and return the whole text) and
+  `noyalib_validate` (parse check with line and column, or JSON Schema
+  violations with their paths). The file-bound tools are unchanged.
+
 ## [v0.0.34] - 2026-09-05
 
 ### Changed

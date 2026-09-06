@@ -146,6 +146,81 @@ pub fn descriptors() -> Vec<JsonValue> {
                 "required": ["file", "doc_index", "path", "value"]
             }
         }),
+        json!({
+            "name": "noyalib_parse",
+            "title": "Parse YAML text into JSON (stateless)",
+            // Content-in-request: nothing on disk is read or written. Pure,
+            // read-only, idempotent, closed-world.
+            "annotations": {
+                "title": "Parse YAML text into JSON (stateless)",
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+            },
+            "description": "Parse the YAML text given in the request and return \
+                its JSON data model (custom tags stripped, the projection the \
+                official YAML test suite expects). Multi-document streams return \
+                a JSON array with one element per document. Refuses hostile \
+                input (nesting, alias expansion, size) with the same limits as \
+                the library. Nothing is read from or written to disk.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "yaml": { "type": "string", "description": "The YAML text to parse." }
+                },
+                "required": ["yaml"]
+            }
+        }),
+        json!({
+            "name": "noyalib_edit",
+            "title": "Edit a value in YAML text, losslessly (stateless)",
+            "annotations": {
+                "title": "Edit a value in YAML text, losslessly (stateless)",
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+            },
+            "description": "Set the value at a dotted/indexed path in the YAML text \
+                given in the request and return the whole edited text. Only the \
+                touched span changes; every comment, blank line and quote style \
+                elsewhere is preserved byte-for-byte. Nothing on disk is touched: \
+                the caller decides where the result goes.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "yaml": { "type": "string", "description": "The YAML text to edit." },
+                    "path": { "type": "string", "description": "Dotted/indexed path, e.g. `server.port` or `items[0].name`." },
+                    "value": { "type": "string", "description": "Replacement value as a YAML fragment." }
+                },
+                "required": ["yaml", "path", "value"]
+            }
+        }),
+        json!({
+            "name": "noyalib_validate",
+            "title": "Validate YAML text, optionally against a JSON Schema (stateless)",
+            "annotations": {
+                "title": "Validate YAML text, optionally against a JSON Schema (stateless)",
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+            },
+            "description": "Check that the YAML text parses under the library's \
+                limits, and when a JSON Schema (as JSON text) is given, that the \
+                document satisfies it. Returns `valid` with an empty list, or the \
+                parse error with its line and column, or every schema violation \
+                with its RFC 6901 path. Nothing on disk is touched.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "yaml": { "type": "string", "description": "The YAML text to validate." },
+                    "schema": { "type": "string", "description": "A JSON Schema, as JSON text (optional)." }
+                },
+                "required": ["yaml"]
+            }
+        }),
     ]
 }
 
@@ -162,6 +237,9 @@ pub fn call(params: JsonValue) -> Result<JsonValue, (i32, String)> {
         "noyalib_get" => tool_get(&args),
         "noyalib_set" => tool_set(&args),
         "noyalib_set_multidoc" => tool_set_multidoc(&args),
+        "noyalib_parse" => tool_parse(&args),
+        "noyalib_edit" => tool_edit(&args),
+        "noyalib_validate" => tool_validate(&args),
         _ => Err((-32601, format!("unknown tool: {name}"))),
     }
 }
@@ -250,6 +328,71 @@ fn tool_set_multidoc(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
 /// race where `fs::write` returned before the kernel page cache
 /// flushed, leaving a freshly-spawned reader to observe the old
 /// bytes.
+/// Stateless: parse the request's YAML and return its JSON data model.
+fn tool_parse(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+    let yaml = arg_str(args, "yaml")?;
+    let docs = noyalib::load_all_as::<noyalib::Value>(yaml)
+        .map_err(|e| (-32001, format!("parse: {e}")))?;
+    let json: Vec<serde_json::Value> = docs
+        .into_iter()
+        .map(|d| serde_json::to_value(d.untag()).map_err(|e| (-32001, format!("json: {e}"))))
+        .collect::<Result<_, _>>()?;
+    let out = match json.len() {
+        1 => serde_json::to_string_pretty(&json[0]),
+        _ => serde_json::to_string_pretty(&json),
+    }
+    .map_err(|e| (-32001, format!("json: {e}")))?;
+    Ok(ok_text(out))
+}
+
+/// Stateless: edit one value in the request's YAML and return the text.
+fn tool_edit(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+    let yaml = arg_str(args, "yaml")?;
+    let path = arg_str(args, "path")?;
+    let value = arg_str(args, "value")?;
+    let mut doc = parse_document(yaml).map_err(|e| (-32001, format!("parse: {e}")))?;
+    doc.set(path, value)
+        .map_err(|e| (-32003, format!("set {path} = {value}: {e}")))?;
+    Ok(ok_text(doc.to_string()))
+}
+
+/// Stateless: parse-check the request's YAML, and validate it against a
+/// JSON Schema when one is given.
+fn tool_validate(args: &JsonValue) -> Result<JsonValue, (i32, String)> {
+    let yaml = arg_str(args, "yaml")?;
+    let value = match noyalib::from_str::<noyalib::Value>(yaml) {
+        Ok(v) => v,
+        Err(e) => {
+            let (line, column) = e.location().map_or((0, 0), |l| (l.line(), l.column()));
+            return Ok(ok_text(
+                json!({ "valid": false, "error": e.to_string(), "line": line, "column": column })
+                    .to_string(),
+            ));
+        }
+    };
+    let Some(schema_text) = args.get("schema").and_then(|v| v.as_str()) else {
+        return Ok(ok_text(
+            json!({ "valid": true, "violations": [] }).to_string(),
+        ));
+    };
+    let schema: serde_json::Value = serde_json::from_str(schema_text)
+        .map_err(|e| (-32602, format!("schema is not JSON: {e}")))?;
+    let schema_value: noyalib::Value =
+        serde_json::from_value(schema).map_err(|e| (-32602, format!("schema: {e}")))?;
+    let compiled = noyalib::CompiledSchema::compile(&schema_value)
+        .map_err(|e| (-32602, format!("schema: {e}")))?;
+    let violations = compiled
+        .iter_errors(&value)
+        .map_err(|e| (-32001, format!("validate: {e}")))?;
+    let list: Vec<JsonValue> = violations
+        .iter()
+        .map(|v| json!({ "path": v.instance_path, "keyword": v.keyword, "message": v.message }))
+        .collect();
+    Ok(ok_text(
+        json!({ "valid": list.is_empty(), "violations": list }).to_string(),
+    ))
+}
+
 fn write_atomic(file: &str, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     use std::path::Path;
@@ -305,11 +448,14 @@ mod tests {
     #[test]
     fn descriptors_lists_all_tools_with_input_schemas() {
         let d = descriptors();
-        assert_eq!(d.len(), 3);
+        assert_eq!(d.len(), 6);
         let names: Vec<&str> = d.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert!(names.contains(&"noyalib_get"));
         assert!(names.contains(&"noyalib_set"));
         assert!(names.contains(&"noyalib_set_multidoc"));
+        assert!(names.contains(&"noyalib_parse"));
+        assert!(names.contains(&"noyalib_edit"));
+        assert!(names.contains(&"noyalib_validate"));
         for tool in &d {
             assert!(tool["description"].is_string());
             assert_eq!(tool["inputSchema"]["type"].as_str(), Some("object"));
@@ -366,6 +512,71 @@ mod tests {
         .unwrap_err();
         assert_eq!(err.0, -32002);
         let _ = fs::remove_file(&p);
+    }
+
+    #[test]
+    fn parse_is_stateless_and_returns_the_json_model() {
+        let v = call(json!({
+            "name": "noyalib_parse",
+            "arguments": { "yaml": "a: 0x2A\nb: !custom x\nc:\n" }
+        }))
+        .unwrap();
+        let text = v["content"][0]["text"].as_str().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert_eq!(parsed["a"], 42);
+        assert_eq!(parsed["b"], "x");
+        assert!(parsed["c"].is_null());
+        let err = call(json!({ "name": "noyalib_parse", "arguments": { "yaml": "a: [\n" } }))
+            .unwrap_err();
+        assert_eq!(err.0, -32001);
+    }
+
+    #[test]
+    fn parse_returns_an_array_for_a_stream() {
+        let v = call(json!({ "name": "noyalib_parse", "arguments": { "yaml": "--- 1\n--- 2\n" } }))
+            .unwrap();
+        let parsed: serde_json::Value =
+            serde_json::from_str(v["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(parsed, json!([1, 2]));
+    }
+
+    #[test]
+    fn edit_returns_the_whole_text_with_one_span_changed() {
+        let v = call(json!({
+            "name": "noyalib_edit",
+            "arguments": { "yaml": "# keep\nversion: 0.0.34 # inline\nname: x\n", "path": "version", "value": "0.0.35" }
+        }))
+        .unwrap();
+        assert_eq!(
+            v["content"][0]["text"].as_str().unwrap(),
+            "# keep\nversion: 0.0.35 # inline\nname: x\n"
+        );
+    }
+
+    #[test]
+    fn validate_reports_parse_errors_and_schema_violations() {
+        let v =
+            call(json!({ "name": "noyalib_validate", "arguments": { "yaml": "a: [\n" } })).unwrap();
+        let r: serde_json::Value =
+            serde_json::from_str(v["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(r["valid"], false);
+        assert!(r["error"].as_str().unwrap().len() > 3);
+        let schema = r#"{"type":"object","properties":{"port":{"type":"integer","maximum":65535}},"required":["port"]}"#;
+        let v = call(json!({ "name": "noyalib_validate", "arguments": { "yaml": "port: 70000\n", "schema": schema } })).unwrap();
+        let r: serde_json::Value =
+            serde_json::from_str(v["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(r["valid"], false);
+        assert!(!r["violations"].as_array().unwrap().is_empty());
+        assert!(
+            r["violations"][0]["path"]
+                .as_str()
+                .unwrap()
+                .contains("port")
+        );
+        let v = call(json!({ "name": "noyalib_validate", "arguments": { "yaml": "port: 8080\n", "schema": schema } })).unwrap();
+        let r: serde_json::Value =
+            serde_json::from_str(v["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(r["valid"], true);
     }
 
     #[test]
