@@ -6,11 +6,11 @@
     "url": "https://github.com/sebastienrousseau/noyalib-mcp",
     "source": "github"
   },
-  "version": "0.0.41",
+  "version": "0.0.42",
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/sebastienrousseau/noyalib-mcp:0.0.41",
+      "identifier": "ghcr.io/sebastienrousseau/noyalib-mcp:0.0.42",
       "transport": {
         "type": "stdio"
       }

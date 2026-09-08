@@ -506,9 +506,8 @@ checksum = "c2a86d3146ed3995b5913c414f6664344b9617457320782e64f0bb44afd49d74"
 
 [[package]]
 name = "noyalib"
-version = "0.0.41"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57b03af4ae0a1f58ac317c9aba6057d2a3560325178436c15e93c31e6a5119c5"
+version = "0.0.42"
+source = "git+https://github.com/sebastienrousseau/noyalib?branch=feat%2Fv0.0.42#ddc7c0a8e58abc78968b6e96c219bf2f9277c7c5"
 dependencies = [
  "hashbrown",
  "indexmap",
@@ -524,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "noyalib-mcp"
-version = "0.0.41"
+version = "0.0.42"
 dependencies = [
  "criterion",
  "noyalib",
