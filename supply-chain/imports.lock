@@ -61,6 +61,10 @@ audited_as = "0.0.41"
 version = "0.0.43"
 audited_as = "0.0.42"
 
+[[unpublished.noyalib-mcp]]
+version = "0.0.44"
+audited_as = "0.0.43"
+
 [[publisher.bumpalo]]
 version = "3.20.3"
 when = "2026-05-22"
@@ -68,11 +72,25 @@ user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
 
+[[publisher.jsonschema]]
+version = "0.56.0"
+when = "2026-09-10"
+user-id = 82692
+user-login = "Stranger6667"
+user-name = "Dmitry Dygalo"
+
 [[publisher.libm]]
 version = "0.2.16"
 when = "2026-01-24"
 user-id = 55123
 user-login = "rust-lang-owner"
+
+[[publisher.referencing]]
+version = "0.56.0"
+when = "2026-09-10"
+user-id = 82692
+user-login = "Stranger6667"
+user-name = "Dmitry Dygalo"
 
 [[publisher.wasip2]]
 version = "1.0.1+wasi-0.2.4"
