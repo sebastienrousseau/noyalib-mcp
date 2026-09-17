@@ -201,8 +201,20 @@ who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.20 -> 1.0.23"
 
+[[trusted.jsonschema]]
+criteria = "safe-to-deploy"
+user-id = 82692 # Dmitry Dygalo (Stranger6667)
+start = "2020-03-29"
+end = "2027-09-17"
+
 [[trusted.libm]]
 criteria = "safe-to-deploy"
 user-id = 55123 # rust-lang-owner
 start = "2024-10-26"
 end = "2027-05-09"
+
+[[trusted.referencing]]
+criteria = "safe-to-deploy"
+user-id = 82692 # Dmitry Dygalo (Stranger6667)
+start = "2024-09-29"
+end = "2027-09-17"
