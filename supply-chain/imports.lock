@@ -65,6 +65,10 @@ audited_as = "0.0.42"
 version = "0.0.44"
 audited_as = "0.0.43"
 
+[[unpublished.noyalib-mcp]]
+version = "0.0.45"
+audited_as = "0.0.44"
+
 [[publisher.bumpalo]]
 version = "3.20.3"
 when = "2026-05-22"
