@@ -1,63 +1,43 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 Noyalib. All rights reserved.
 
-//! Prompt registry for the MCP server.
+//! The prompts: `prompts/list` and `prompts/get`.
 //!
-//! Each entry in [`descriptors`] is what a client sees from
-//! `prompts/list`; [`get`] is the dispatch entry point for
-//! `prompts/get`, returning the MCP prompt-message payload. Prompts
-//! are pure text templates — they run no tools and touch no files;
-//! they teach the host model the recommended `noyalib_get` /
-//! `noyalib_set` workflow.
+//! A prompt is a pure text template. It runs no tool and touches no
+//! file; it teaches the host model the recommended `noyalib_get` /
+//! `noyalib_set` workflow. [`format_and_lint_yaml`] builds the text;
+//! the `#[prompt_router]` block is what the SDK serves.
 
-use serde_json::{Value as JsonValue, json};
+use rmcp::handler::server::wrapper::Parameters;
+use rmcp::model::{GetPromptResult, PromptMessage, Role};
+use rmcp::{prompt, prompt_router};
+use schemars::JsonSchema;
+use serde::Deserialize;
 
-/// Descriptors returned to MCP clients via `prompts/list`.
-pub fn descriptors() -> Vec<JsonValue> {
-    vec![json!({
-        "name": "format_and_lint_yaml",
-        "title": "Format and lint a YAML file (lossless)",
-        "description": "Guided workflow for inspecting and losslessly \
-            fixing a YAML file with noyalib_get and noyalib_set, preserving \
-            comments and formatting.",
-        "arguments": [
-            {
-                "name": "file",
-                "description": "Path to the YAML file to review. Optional; \
-                    omit for a general workflow.",
-                "required": false
-            }
-        ]
-    })]
+use crate::YamlServer;
+
+/// The names of the prompts, in the order they are listed.
+pub const PROMPT_NAMES: [&str; 1] = ["format_and_lint_yaml"];
+
+/// Arguments of `format_and_lint_yaml`.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+pub struct FormatAndLintArgs {
+    /// Path to the YAML file to review. Optional; omit for a general
+    /// workflow.
+    #[schemars(example = &"config.yaml")]
+    #[serde(default)]
+    pub file: Option<String>,
 }
 
-/// `prompts/get` dispatcher. Returns the JSON-RPC `result` payload on
-/// success, or `(code, message)` for an error envelope.
-pub fn get(params: JsonValue) -> Result<JsonValue, (i32, String)> {
-    let name = params
-        .get("name")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| (-32602, "missing field: name".to_string()))?;
-    match name {
-        "format_and_lint_yaml" => Ok(format_and_lint_yaml(&params)),
-        _ => Err((-32602, format!("unknown prompt: {name}"))),
-    }
-}
-
-/// Build the `format_and_lint_yaml` prompt messages, embedding the
-/// caller-supplied `file` argument when present.
-fn format_and_lint_yaml(params: &JsonValue) -> JsonValue {
-    let file = params
-        .get("arguments")
-        .and_then(|a| a.get("file"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let target = if file.is_empty() {
-        "the YAML file".to_string()
-    } else {
-        format!("`{file}`")
+/// The `format_and_lint_yaml` prompt text, naming `file` when one is
+/// given.
+#[must_use]
+pub fn format_and_lint_yaml(file: Option<&str>) -> String {
+    let target = match file {
+        Some(f) if !f.is_empty() => format!("`{f}`"),
+        _ => "the YAML file".to_owned(),
     };
-    let text = format!(
+    format!(
         "Help me format and lint {target} without losing comments or \
          formatting. First call noyalib_get on the paths you want to inspect \
          to read the current values exactly as written. Propose a minimal set \
@@ -66,13 +46,34 @@ fn format_and_lint_yaml(params: &JsonValue) -> JsonValue {
          and the replacement YAML fragment: it rewrites only the touched span, \
          so every comment, blank line and sibling entry is preserved \
          byte-for-byte. Re-read with noyalib_get to confirm each change."
-    );
-    json!({
-        "description": "Guided lossless YAML format-and-lint workflow.",
-        "messages": [
-            { "role": "user", "content": { "type": "text", "text": text } }
-        ]
-    })
+    )
+}
+
+#[prompt_router(vis = "pub(crate)")]
+#[allow(
+    clippy::unused_self,
+    missing_docs,
+    reason = "the SDK's prompt router calls prompts as methods and \
+              generates an undocumented descriptor function"
+)]
+impl YamlServer {
+    #[prompt(
+        name = "format_and_lint_yaml",
+        title = "Format and lint a YAML file (lossless)",
+        description = "Guided workflow for inspecting and losslessly \
+                       fixing a YAML file with noyalib_get and noyalib_set, preserving \
+                       comments and formatting."
+    )]
+    fn format_and_lint_yaml_prompt(
+        &self,
+        Parameters(args): Parameters<FormatAndLintArgs>,
+    ) -> GetPromptResult {
+        GetPromptResult::new(vec![PromptMessage::new_text(
+            Role::User,
+            format_and_lint_yaml(args.file.as_deref()),
+        )])
+        .with_description("Guided lossless YAML format-and-lint workflow.")
+    }
 }
 
 #[cfg(test)]
@@ -80,45 +81,54 @@ mod tests {
     use super::*;
 
     #[test]
-    fn descriptors_lists_the_prompt_with_arguments() {
-        let d = descriptors();
-        assert_eq!(d.len(), 1);
-        assert_eq!(d[0]["name"].as_str(), Some("format_and_lint_yaml"));
-        assert!(d[0]["arguments"].is_array());
+    fn the_prompt_is_listed_with_its_optional_argument() {
+        let prompts = YamlServer::prompt_router().list_all();
+        let names: Vec<&str> = prompts.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, PROMPT_NAMES);
+        let p = &prompts[0];
+        assert!(p.title.is_some());
+        assert!(p.description.is_some());
+        let args = p.arguments.as_ref().expect("arguments");
+        assert_eq!(args.len(), 1);
+        assert_eq!(args[0].name, "file");
+        assert_eq!(args[0].required, Some(false));
+        assert!(
+            args[0]
+                .description
+                .as_deref()
+                .is_some_and(|d| d.contains("Optional")),
+            "{args:?}"
+        );
     }
 
     #[test]
-    fn get_rejects_missing_name() {
-        let err = get(json!({})).unwrap_err();
-        assert_eq!(err.0, -32602);
-        assert!(err.1.contains("name"));
-    }
-
-    #[test]
-    fn get_rejects_unknown_prompt() {
-        let err = get(json!({"name": "nope"})).unwrap_err();
-        assert_eq!(err.0, -32602);
-        assert!(err.1.contains("nope"));
-    }
-
-    #[test]
-    fn get_without_file_uses_generic_target() {
-        let v = get(json!({"name": "format_and_lint_yaml"})).unwrap();
-        let text = v["messages"][0]["content"]["text"].as_str().unwrap();
+    fn without_a_file_the_text_is_generic() {
+        let text = format_and_lint_yaml(None);
         assert!(text.contains("the YAML file"));
         assert!(text.contains("noyalib_get"));
         assert!(text.contains("noyalib_set"));
-        assert_eq!(v["messages"][0]["role"].as_str(), Some("user"));
+        assert_eq!(format_and_lint_yaml(Some("")), text);
     }
 
     #[test]
-    fn get_with_file_embeds_the_path() {
-        let v = get(json!({
-            "name": "format_and_lint_yaml",
-            "arguments": { "file": "config.yml" }
-        }))
-        .unwrap();
-        let text = v["messages"][0]["content"]["text"].as_str().unwrap();
+    fn with_a_file_the_text_names_it() {
+        let text = format_and_lint_yaml(Some("config.yml"));
         assert!(text.contains("`config.yml`"));
+    }
+
+    #[test]
+    fn the_prompt_renders_a_user_message() {
+        let result = YamlServer::new().format_and_lint_yaml_prompt(Parameters(FormatAndLintArgs {
+            file: Some("deploy.yaml".into()),
+        }));
+        assert_eq!(result.messages.len(), 1);
+        assert_eq!(result.messages[0].role, Role::User);
+        let text = result.messages[0]
+            .content
+            .as_text()
+            .map(|t| t.text.as_str())
+            .expect("text");
+        assert!(text.contains("`deploy.yaml`"));
+        assert!(result.description.is_some());
     }
 }

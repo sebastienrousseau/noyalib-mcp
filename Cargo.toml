@@ -1,8 +1,8 @@
 [package]
 name = "noyalib-mcp"
-version = "0.0.45"
+version = "0.0.46"
 edition = "2024"
-rust-version = "1.86.0"
+rust-version = "1.88.0"
 license = "MIT OR Apache-2.0"
 description = "Model Context Protocol server exposing noyalib's lossless YAML editing to AI agents"
 repository = "https://github.com/sebastienrousseau/noyalib-mcp"
@@ -24,12 +24,26 @@ path = "src/main.rs"
 [dependencies]
 # Strict-lockstep versioning (ADR-0005). Dependabot ignores this
 # dep; bumps are coordinated with the parent noyalib release tag.
-noyalib = { version = "=0.0.45", default-features = false, features = ["std", "validate-schema"] }
+noyalib = { version = "=0.0.46", default-features = false, features = ["std", "validate-schema"] }
+# The official MCP SDK: protocol revisions 2024-11-05 through
+# 2026-07-28, stdio and streamable HTTP. The legacy HTTP+SSE bridge in
+# src/transport.rs is the only protocol code left in this crate.
+rmcp = { version = "3.4", features = ["server", "macros", "transport-io", "transport-streamable-http-server"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "sync"] }
+tokio-util = "0.7"
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query"] }
+futures = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+schemars = "1"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 criterion = "0.8"
+# The client half of the SDK, so tests and the example can hold a real
+# session against the server through an in-memory pipe.
+rmcp = { version = "3.4", features = ["client"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "time"] }
 
 [[bench]]
 name = "mcp_tools"

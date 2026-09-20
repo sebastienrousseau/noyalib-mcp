@@ -196,10 +196,7 @@ fn noyalib_get_agrees_with_the_suite_on_every_addressable_case() {
         };
         let file = tmp.join(format!("{}.yaml", case.id.replace(':', "_")));
         std::fs::write(&file, &case.yaml).unwrap();
-        let result = noyalib_mcp::tools::call(serde_json::json!({
-            "name": "noyalib_get",
-            "arguments": { "file": file.to_str().unwrap(), "path": path }
-        }));
+        let result = noyalib_mcp::get(file.to_str().unwrap(), &path);
         if result.is_err() == case.fail {
             passed += 1;
         } else {
