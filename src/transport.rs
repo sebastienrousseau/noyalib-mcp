@@ -614,4 +614,14 @@ mod tests {
             assert!(text.contains(needle), "usage lacks {needle}:\n{text}");
         }
     }
+
+    #[test]
+    fn sse_state_debug_hides_runtime_state() {
+        let state = SseState {
+            factory: Box::new(|| ()),
+            sessions: Sessions::default(),
+            shutdown: CancellationToken::new(),
+        };
+        assert_eq!(format!("{state:?}"), "SseState { .. }");
+    }
 }

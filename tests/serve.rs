@@ -172,9 +172,9 @@ async fn protocol_mistakes_are_readable_results() {
 async fn every_advertised_tool_is_callable() {
     let client = session().await;
     let file = tempfile("name: first\n");
-    let multidoc = tempfile("name: first\n---\nname: second\n");
+    let multidoc_file = tempfile("name: first\n---\nname: second\n");
     let path = file.to_str().unwrap();
-    let multidoc_path = multidoc.to_str().unwrap();
+    let multidoc_path = multidoc_file.to_str().unwrap();
     let yaml = "server:\n  port: 8080\n";
     for (name, args) in [
         ("noyalib_get", json!({"file": path, "path": "name"})),
@@ -205,11 +205,11 @@ async fn every_advertised_tool_is_callable() {
     }
     assert_eq!(std::fs::read_to_string(&file).unwrap(), "name: changed\n");
     assert_eq!(
-        std::fs::read_to_string(&multidoc).unwrap(),
+        std::fs::read_to_string(&multidoc_file).unwrap(),
         "name: first\n---\nname: third\n"
     );
     let _ = std::fs::remove_file(&file);
-    let _ = std::fs::remove_file(&multidoc);
+    let _ = std::fs::remove_file(&multidoc_file);
     let _ = client.cancel().await.expect("clean close");
 }
 

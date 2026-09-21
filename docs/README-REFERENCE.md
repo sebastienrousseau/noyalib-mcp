@@ -75,7 +75,7 @@ commands.
 
 ## Requirements
 
-- **Rust 1.86.0 or newer** to build from source: `rust-version` in
+- **Rust 1.88.0 or newer** to build from source: `rust-version` in
   the manifest, enforced by the `msrv-core` CI job on every push.
 - **Any tier-1 platform.** CI runs the tests on Linux, macOS, and
   Windows with the stable, beta, and nightly toolchains; stable is the
@@ -204,18 +204,17 @@ Each tool's full input schema lives in the response to
 `initialize` / `initialized` / `notifications/cancelled`
 lifecycle.
 
-Format / parse / validate are not exposed as MCP tools today —
-they're available via the [`noya-cli`](../../noya-cli/README.md)
-binaries (`noyafmt`, `noyavalidate`) and the
-[`noyalib`](../../noyalib/README.md) library API. Promotion to
-first-class MCP tools is on the v0.0.2+ roadmap.
+Command-line workflows are available through the
+[`noya-cli`](https://github.com/sebastienrousseau/noya-cli) binaries
+(`noyafmt`, `noyavalidate`). Lower-level embedding uses the
+[`noyalib`](https://github.com/sebastienrousseau/noyalib) library API.
 
 ---
 
 ## Examples
 
 Agent-driving demos under
-[`crates/noyalib-mcp/examples/`](examples/):
+[`examples/`](../examples/):
 
 | Script | What it shows |
 |---|---|
@@ -277,16 +276,12 @@ Full cookbook: [`pkg/VERIFY.md`](https://github.com/sebastienrousseau/noyalib/bl
 
 ## Compatibility
 
-**MSRV: Rust 1.86.0** stable — the lowest toolchain this crate
-can be **built and tested** on, matching the `noyalib` core floor.
-`criterion 0.8` (the benchmark dev-dependency) declares
-`rust-version = 1.86`, so `cargo check --all-targets` and the
-bench suite fail on 1.85 with `criterion@0.8.2 requires rustc
-1.86` — `cargo check --lib` alone still builds on 1.85. We publish
-the number we verify. The MCP wire surface itself is text-only
-JSON-RPC and pulls no nightly-only deps. CI verifies the floor on every
-PR via the `Per-crate MSRV` workflow job. The bump policy
-lives in
+**MSRV: Rust 1.88.0** stable, the lowest toolchain this crate can be
+**built and tested** on. The MCP SDK sets a higher floor than the
+`noyalib` core. We publish the number we verify. The MCP wire surface
+itself is text-only JSON-RPC and pulls no nightly-only dependencies.
+CI verifies the floor on every PR via the `msrv-core` workflow job.
+The bump policy lives in
 [`docs/POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/docs/POLICIES.md#1-msrv-minimum-supported-rust-version).
 
 **Tier-1 platforms** (CI-verified each PR): `aarch64-apple-darwin`,

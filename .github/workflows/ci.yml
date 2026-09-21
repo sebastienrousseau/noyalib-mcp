@@ -78,12 +78,11 @@ jobs:
       fail-under-regions: 93
 
   msrv-core:
-    # Verifies the declared 1.86.0 floor actually builds — the gate the
-    # whole lockstep set was missing. mcp builds cleanly on 1.86
-    # (no_std --lib, default, and clippy --lib -D warnings all pass).
+    # Verifies the declared 1.88.0 floor actually builds. The MCP SDK
+    # sets a higher floor than the core crate.
     uses: sebastienrousseau/noyalib/.github/workflows/shared-msrv-core.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
     with:
-      toolchain: "1.86.0"
+      toolchain: "1.88.0"
 
   fuzz-regression:
     # Every fuzz target builds on every push, and the seed corpus (plus
@@ -96,7 +95,7 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target-fuzz
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
           toolchain: nightly
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
