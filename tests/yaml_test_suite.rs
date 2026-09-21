@@ -163,11 +163,12 @@ fn to_json(v: &noyalib::Value) -> serde_json::Value {
     serde_json::to_value(v.clone().untag()).expect("Value serialises to JSON")
 }
 
-/// A case is addressable when its first document is a mapping whose
-/// keys are plain identifiers (the tool's dotted-path grammar).
+/// A case is addressable when it contains exactly one mapping document
+/// whose keys are plain identifiers (the tool's dotted-path grammar).
 fn first_key(case: &Case) -> Option<String> {
     let docs = expected_docs(case)?;
-    let obj = docs.first()?.as_object()?;
+    let [doc] = docs.as_slice() else { return None };
+    let obj = doc.as_object()?;
     let key = obj.keys().next()?;
     let plain = !key.is_empty()
         && key

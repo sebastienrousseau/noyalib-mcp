@@ -171,8 +171,10 @@ async fn protocol_mistakes_are_readable_results() {
 #[tokio::test]
 async fn every_advertised_tool_is_callable() {
     let client = session().await;
-    let file = tempfile("name: first\n---\nname: second\n");
+    let file = tempfile("name: first\n");
+    let multidoc_file = tempfile("name: first\n---\nname: second\n");
     let path = file.to_str().unwrap();
+    let multidoc_path = multidoc_file.to_str().unwrap();
     let yaml = "server:\n  port: 8080\n";
     for (name, args) in [
         ("noyalib_get", json!({"file": path, "path": "name"})),
@@ -182,7 +184,7 @@ async fn every_advertised_tool_is_callable() {
         ),
         (
             "noyalib_set_multidoc",
-            json!({"file": path, "doc_index": 1, "path": "name", "value": "third"}),
+            json!({"file": multidoc_path, "doc_index": 1, "path": "name", "value": "third"}),
         ),
         ("noyalib_parse", json!({"yaml": yaml})),
         (
@@ -201,11 +203,13 @@ async fn every_advertised_tool_is_callable() {
         assert_ne!(result.is_error, Some(true), "{name}: {result:?}");
         assert!(result.structured_content.is_some(), "{name} unstructured");
     }
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "name: changed\n");
     assert_eq!(
-        std::fs::read_to_string(&file).unwrap(),
-        "name: changed\n---\nname: third\n"
+        std::fs::read_to_string(&multidoc_file).unwrap(),
+        "name: first\n---\nname: third\n"
     );
     let _ = std::fs::remove_file(&file);
+    let _ = std::fs::remove_file(&multidoc_file);
     let _ = client.cancel().await.expect("clean close");
 }
 

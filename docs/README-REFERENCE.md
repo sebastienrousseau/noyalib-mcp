@@ -215,7 +215,7 @@ first-class MCP tools is on the v0.0.2+ roadmap.
 ## Examples
 
 Agent-driving demos under
-[`crates/noyalib-mcp/examples/`](examples/):
+[`examples/`](../examples/):
 
 | Script | What it shows |
 |---|---|
