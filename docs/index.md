@@ -19,6 +19,7 @@ core library, with the user guide, migrations, and policies, is at
 | [Agent integration](agent-integration.md) |
 | [MCP tools reference](tools-reference.md) |
 | [Architecture](ARCHITECTURE.md) |
+| [Decision records](adr/index.md) |
 
 Install, quick start, and the full surface are in the
 [README](https://github.com/sebastienrousseau/noyalib-mcp#readme). The

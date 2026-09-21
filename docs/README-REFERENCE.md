@@ -1,0 +1,352 @@
+<!-- SPDX-License-Identifier: Apache-2.0 OR MIT -->
+
+<p align="center">
+  <img src="https://cloudcdn.pro/noyalib/v1/logos/noyalib.svg" alt="Noyalib logo" width="128" />
+</p>
+
+<h1 align="center">noyalib-mcp</h1>
+
+<p align="center">
+  <strong>Model Context Protocol server exposing noyalib's
+  lossless YAML editing to AI agents (Claude Desktop, Claude
+  Code, Cursor, Zed, Continue.dev, …).</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/sebastienrousseau/noyalib-mcp/actions"><img src="https://img.shields.io/github/actions/workflow/status/sebastienrousseau/noyalib-mcp/ci.yml?style=for-the-badge&logo=github" alt="Build" /></a>
+  <a href="https://crates.io/crates/noyalib-mcp"><img src="https://img.shields.io/crates/v/noyalib-mcp.svg?style=for-the-badge&color=fc8d62&logo=rust" alt="Crates.io" /></a>
+  <a href="https://docs.rs/noyalib-mcp"><img src="https://img.shields.io/badge/docs.rs-noyalib--mcp-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" alt="Docs.rs" /></a>
+  <a href="https://lib.rs/crates/noyalib-mcp"><img src="https://img.shields.io/badge/lib.rs-noyalib-orange.svg?style=for-the-badge" alt="lib.rs" /></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/sebastienrousseau/noyalib-mcp"><img src="https://img.shields.io/ossf-scorecard/github.com/sebastienrousseau/noyalib-mcp?style=for-the-badge&label=OpenSSF%20Scorecard&logo=openssf" alt="OpenSSF Scorecard" /></a>
+  <a href="https://www.bestpractices.dev/projects/14496"><img src="https://img.shields.io/cii/level/14496?style=for-the-badge&label=OpenSSF%20Best%20Practices&logo=openssf" alt="OpenSSF Best Practices" /></a>
+</p>
+
+---
+
+## Contents
+
+- [Install](#install) — Cargo, npx, Docker
+- [Requirements](#requirements) — toolchain floor, platforms, the core pin
+- [Quick Start](#quick-start) — JSON-RPC handshake
+- [Why this approach?](#why-this-approach) — design rationale
+- [Connect](#connect) — per-client configuration
+- [Tools](#tools) — MCP tool reference
+- [Examples](#examples) — runnable scripts
+- [Verification](#verification) — cosign + npm provenance
+- [When not to use noyalib-mcp](#when-not-to-use-noyalib-mcp)
+- [Documentation](#documentation)
+- [License](#license)
+
+---
+
+## Install
+
+```bash
+cargo install noyalib-mcp
+```
+
+For environments without a Rust toolchain (the typical AI-agent
+deployment shape):
+
+```bash
+# npm wrapper — auto-downloads the matching binary on first run,
+# caches under ~/.cache/noyalib-mcp/<version>/.
+npx @sebastienrousseau/noyalib-mcp
+
+# Container — multi-arch (linux/amd64, linux/arm64).
+docker run --rm -i ghcr.io/sebastienrousseau/noyalib-mcp:latest
+```
+
+> **Split from the monorepo since v0.0.13.** Prior versions
+> shipped from `sebastienrousseau/noyalib/crates/noyalib-mcp/`
+> under the workspace-lockstep release cadence. From v0.0.13
+> onward `noyalib-mcp` lives here as its own crate, still
+> released in strict lockstep with the parent
+> [`noyalib`](https://github.com/sebastienrousseau/noyalib) at
+> the same version. See
+> [ADR-0005](https://github.com/sebastienrousseau/noyalib/blob/main/docs/adr/0005-workspace-split.md)
+> for the rationale and rollback recipe.
+
+Both consume the same signed binary attached to every GitHub
+Release. See [Verification](#verification) for the verify
+commands.
+
+---
+
+## Requirements
+
+- **Rust 1.88.0 or newer** to build from source: `rust-version` in
+  the manifest, enforced by the `msrv-core` CI job on every push.
+- **Any tier-1 platform.** CI runs the tests on Linux, macOS, and
+  Windows with the stable, beta, and nightly toolchains; stable is the
+  gate, beta and nightly are early warning.
+- **The matching core.** This crate pins `noyalib` at the identical
+  `=0.0.X` and releases in lockstep with it; Cargo resolves that pin
+  for you.
+- **An MCP client** speaking JSON-RPC 2.0 over stdio (2025-06-18 or
+  2026-07-28 protocol eras); the README's Connect section lists tested
+  hosts.
+
+## Quick Start
+
+The server speaks JSON-RPC 2.0 over stdio with newline-delimited
+frames, per the
+[MCP specification](https://modelcontextprotocol.io). A typical
+agent launches the binary as a child process, sends
+`initialize`, then dispatches tool calls:
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"agent","version":"0.0.1"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+{"jsonrpc":"2.0","id":3,"method":"tools/call",
+ "params":{"name":"format","arguments":{"yaml":"a:1\nb:2\n"}}}
+```
+
+---
+
+## Why this approach?
+
+AI agents that edit YAML configuration today regex-replace and
+corrupt comments, indentation, and document structure. The same
+agent fixing a port number in a Kubernetes manifest can shift
+every comment by a line, reorder sibling keys, or strip
+trailing whitespace that a downstream linter cared about.
+
+noyalib's CST does the edits losslessly — a `set("server.port",
+"9090")` rewrites only the byte span of the `8080` scalar; the
+surrounding comments and indentation pass through untouched.
+This server is the protocol shim that lets MCP-aware clients
+drive that engine safely:
+
+- **Lossless mutation.** `tools/call set` returns a document
+  byte-identical to the input outside the touched span.
+- **Surgical reads.** `tools/call get` walks the dotted path
+  and returns just the value, not the whole tree.
+- **Schema validation.** `tools/call validate --schema` runs
+  the same JSON Schema 2020-12 engine `noyavalidate` ships.
+- **Stdio transport.** Standard MCP. Works with every
+  spec-compliant client.
+
+---
+
+## Connect
+
+### Claude Desktop / Claude Code
+
+```bash
+claude mcp add noyalib $(which noyalib-mcp)
+```
+
+### Cursor
+
+`~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "noyalib": {
+      "command": "noyalib-mcp"
+    }
+  }
+}
+```
+
+### Zed
+
+`~/.config/zed/settings.json`:
+
+```json
+{
+  "context_servers": {
+    "noyalib": {
+      "command": { "path": "noyalib-mcp" }
+    }
+  }
+}
+```
+
+### Continue.dev
+
+`~/.continue/config.json`:
+
+```json
+{
+  "experimental": {
+    "modelContextProtocolServers": [
+      { "transport": { "type": "stdio", "command": "noyalib-mcp" } }
+    ]
+  }
+}
+```
+
+### Any other MCP-aware client
+
+Point at the binary; the transport is stdio with newline-
+delimited JSON-RPC 2.0.
+
+---
+
+## Tools
+
+The v0.0.1 server registers two file-oriented tools — both
+operate on a YAML file at `file: <path>`, not on inline source
+strings, so an agent's edits land on disk losslessly:
+
+- `noyalib_get` — Takes `{ file: string, path: string }`; returns the raw source fragment at the dotted/indexed path (e.g. `server.host`, `items[0].name`). No re-quoting; no canonicalisation.
+- `noyalib_set` — Takes `{ file: string, path: string, value: string }`; returns the file rewritten via the lossless CST so only the touched span changes; comments, blank lines, and sibling formatting survive byte-for-byte. The `value` is a YAML fragment (`0.0.2`, `"hello"`, `[1, 2, 3]`); a parse failure leaves the file unchanged.
+- `noyalib_parse` — Takes `{ yaml: string }`; returns the JSON data model of the text (tags stripped, a stream as an array). Stateless: nothing on disk is touched.
+- `noyalib_edit` — Takes `{ yaml: string, path: string, value: string }`; returns the whole text with that one value replaced losslessly. Stateless.
+- `noyalib_validate` — Takes `{ yaml: string, schema?: string }`; returns `valid` with either the parse error (line and column) or every JSON Schema violation with its path. Stateless.
+
+Each tool's full input schema lives in the response to
+`tools/list`. The server also handles the standard
+`initialize` / `initialized` / `notifications/cancelled`
+lifecycle.
+
+Command-line workflows are available through the
+[`noya-cli`](https://github.com/sebastienrousseau/noya-cli) binaries
+(`noyafmt`, `noyavalidate`). Lower-level embedding uses the
+[`noyalib`](https://github.com/sebastienrousseau/noyalib) library API.
+
+---
+
+## Examples
+
+Agent-driving demos under
+[`examples/`](../examples/):
+
+| Script | What it shows |
+|---|---|
+| [`handshake.sh`](../examples/handshake.sh) | `initialize` → `tools/list` smoke test. Confirms the binary speaks the protocol and announces the expected tools. |
+| [`format-call.sh`](../examples/format-call.sh) | `tools/call format` on a poorly-spaced document. Demonstrates that comments + indentation pass through the CST formatter unchanged. |
+| [`set-then-get.sh`](../examples/set-then-get.sh) | Round-trip the mutation surface: `set` rewrites `server.port`, `get` reads it back. Surgical edit; surrounding bytes untouched. |
+
+```bash
+chmod +x crates/noyalib-mcp/examples/*.sh
+crates/noyalib-mcp/examples/handshake.sh | jq -c .
+```
+
+POSIX-shell only — no `jq`, no `node` dependencies. Pipe
+through `jq -c .` if you want pretty-printed JSON responses.
+
+---
+
+## Verification
+
+GitHub Releases ship the crate archive and a CycloneDX SBOM,
+each with a sigstore bundle and checksums; the GHCR image is
+built from the tagged source. Pre-built binaries are not
+attached to releases yet. To verify a release artefact:
+
+```bash
+COSIGN_EXPERIMENTAL=1 cosign verify-blob \
+  --certificate-identity-regexp 'https://github.com/sebastienrousseau/noyalib-mcp/' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  --bundle <artefact>.bundle \
+  <artefact>
+```
+
+The npm wrapper additionally carries an
+[npm provenance attestation](https://docs.npmjs.com/generating-provenance-statements):
+
+```bash
+npm view noyalib-mcp provenance
+```
+
+Full cookbook: [`pkg/VERIFY.md`](https://github.com/sebastienrousseau/noyalib/blob/main/pkg/VERIFY.md).
+
+---
+
+## When not to use noyalib-mcp
+
+- **You don't trust your AI agent with filesystem access at
+  all.** noyalib-mcp doesn't read or write files itself —
+  every operation takes the YAML document as a string argument
+  and returns the result as a string. The agent decides what
+  to do with the result. If the agent has filesystem access,
+  it can persist the response wherever it wants.
+- **You need a sandboxed schema registry.** noyalib-mcp accepts
+  schemas as inline strings in `tools/call validate`; it does
+  not fetch schemas from URLs. If your workflow needs
+  network-resolved schemas, the agent is responsible for
+  fetching the schema first and passing the bytes.
+
+---
+
+## Compatibility
+
+**MSRV: Rust 1.88.0** stable, the lowest toolchain this crate can be
+**built and tested** on. The MCP SDK sets a higher floor than the
+`noyalib` core. We publish the number we verify. The MCP wire surface
+itself is text-only JSON-RPC and pulls no nightly-only dependencies.
+CI verifies the floor on every PR via the `msrv-core` workflow job.
+The bump policy lives in
+[`docs/POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/docs/POLICIES.md#1-msrv-minimum-supported-rust-version).
+
+**Tier-1 platforms** (CI-verified each PR): `aarch64-apple-darwin`,
+`x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`. The
+binary writes via atomic file replacement on every platform —
+on Windows via `MoveFileExW(MOVEFILE_REPLACE_EXISTING |
+MOVEFILE_WRITE_THROUGH)` semantics.
+
+---
+
+## Documentation
+
+The four entry points, identical across every repo in the family:
+
+- **[User Manual](https://sebastienrousseau.github.io/noyalib-mcp/manual/)** — this crate's rendered book: its guides, architecture, and release notes; the family manual for the core library is at [https://sebastienrousseau.github.io/noyalib/manual/](https://sebastienrousseau.github.io/noyalib/manual/)
+- **[API reference](https://docs.rs/noyalib-mcp)** — rustdoc on docs.rs
+- **[Developer docs](../DEVELOPMENT.md)** — this repo's dev entry point, pointing at the family guide
+- **[Ecosystem map](https://github.com/sebastienrousseau/noyalib/blob/main/docs/ECOSYSTEM.md)** — the six crates, the lockstep model, the scorecard
+
+- **Engineering policies** (MSRV, SemVer, security, performance, concurrency, platform support, feature flags):
+  [`docs/POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/docs/POLICIES.md)
+- **Security policy**:
+  [`SECURITY.md`](https://github.com/sebastienrousseau/noyalib/blob/main/SECURITY.md)
+- **API reference**: <https://docs.rs/noyalib-mcp>
+- **Tools reference (input schemas + error codes)**:
+  [`docs/tools-reference.md`](tools-reference.md)
+- **Agent integration (Claude Desktop, Cursor, Continue.dev)**:
+  [`docs/agent-integration.md`](agent-integration.md)
+- **MCP specification**: <https://modelcontextprotocol.io>
+- **Workspace README**:
+  <https://github.com/sebastienrousseau/noyalib#readme>
+
+---
+
+## Related MCP Servers
+
+Sibling MCP servers by the same author — open-source, Apache-2.0 licensed, targeting banking and financial-services AI agents. `noyalib-mcp` complements them by giving agents lossless YAML editing for structured configuration files:
+
+| Server | Purpose |
+|---|---|
+| [`pain001-mcp`](https://github.com/sebastienrousseau/pain001-mcp) | Generate & validate ISO 20022 pain.001 payment initiation files (Customer Credit Transfer) |
+| [`bankstatementparser-mcp`](https://github.com/sebastienrousseau/bankstatementparser-mcp) | Parse bank statements (BAI2, MT940/MT942, CAMT.053, OFX, CSV) into structured transactions |
+| [`camt053-mcp`](https://github.com/sebastienrousseau/camt053-mcp) | Parse & reconcile ISO 20022 camt.053 bank-to-customer statements — CBPR+/HVPS+ ready |
+| [`acmt001-mcp`](https://github.com/sebastienrousseau/acmt001-mcp) | Generate & validate ISO 20022 acmt.001 account management messages |
+
+---
+
+## MCP Registry
+
+`mcp-name: io.github.sebastienrousseau/noyalib-mcp`
+
+---
+
+## Conformance
+
+Every push runs the official [yaml-test-suite](https://github.com/yaml/yaml-test-suite)
+through this server's tools, from the same vendored suite and the same core
+commit as the `noyalib` core: 195 of 195 addressable cases (the other 211 have
+no top-level key for `noyalib_get` to read; `noyalib_parse` sees all of them).
+A two-document configuration that uses most of YAML at once
+(`tests/fixtures/ultra-complex/`) parses to exactly its expected JSON through
+`noyalib_parse`. Details and the family table:
+[noyalib.com/conformance](https://noyalib.com/conformance/).
+
+## License
+
+Dual-licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+or [MIT](https://opensource.org/licenses/MIT), at your option.

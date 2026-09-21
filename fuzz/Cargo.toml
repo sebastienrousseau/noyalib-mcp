@@ -18,15 +18,8 @@ libfuzzer-sys = "0.4"
 path = ".."
 
 [[bin]]
-name = "fuzz_handle_message"
-path = "fuzz_targets/fuzz_handle_message.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_tool_call"
-path = "fuzz_targets/fuzz_tool_call.rs"
+name = "tools"
+path = "fuzz_targets/tools.rs"
 test = false
 doc = false
 bench = false

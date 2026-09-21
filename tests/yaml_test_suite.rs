@@ -163,11 +163,12 @@ fn to_json(v: &noyalib::Value) -> serde_json::Value {
     serde_json::to_value(v.clone().untag()).expect("Value serialises to JSON")
 }
 
-/// A case is addressable when its first document is a mapping whose
-/// keys are plain identifiers (the tool's dotted-path grammar).
+/// A case is addressable when it contains exactly one mapping document
+/// whose keys are plain identifiers (the tool's dotted-path grammar).
 fn first_key(case: &Case) -> Option<String> {
     let docs = expected_docs(case)?;
-    let obj = docs.first()?.as_object()?;
+    let [doc] = docs.as_slice() else { return None };
+    let obj = doc.as_object()?;
     let key = obj.keys().next()?;
     let plain = !key.is_empty()
         && key
@@ -196,10 +197,7 @@ fn noyalib_get_agrees_with_the_suite_on_every_addressable_case() {
         };
         let file = tmp.join(format!("{}.yaml", case.id.replace(':', "_")));
         std::fs::write(&file, &case.yaml).unwrap();
-        let result = noyalib_mcp::tools::call(serde_json::json!({
-            "name": "noyalib_get",
-            "arguments": { "file": file.to_str().unwrap(), "path": path }
-        }));
+        let result = noyalib_mcp::get(file.to_str().unwrap(), &path);
         if result.is_err() == case.fail {
             passed += 1;
         } else {

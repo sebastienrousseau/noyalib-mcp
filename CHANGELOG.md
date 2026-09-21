@@ -11,6 +11,77 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
+## [v0.0.46] - 2026-09-20
+
+### Added
+
+- **Three transports from one command line.** `noyalib-mcp` speaks
+  stdio as before; `noyalib-mcp --transport streamable-http --host
+  127.0.0.1 --port 8000` serves `/mcp`; `noyalib-mcp --transport sse
+  --port 8001` serves the older HTTP+SSE transport at `/sse` and
+  `/messages/`. `--version` and `--help` still do what they say. The
+  transport layer is `src/transport.rs`, one file shared with the
+  other Rust servers of the suite. See
+  [ADR 0001](docs/adr/0001-three-transports-one-command-line.md).
+
+- **Both current MCP revisions.** `2025-11-25` (`initialize`,
+  `Mcp-Session-Id`) and `2026-07-28` (stateless, `server/discover`,
+  per-request `_meta`, mirrored routing headers) on the one streamable
+  HTTP endpoint, and over stdio. Older revisions back to `2024-11-05`
+  are accepted from a client that asks for them.
+
+- **Structured results and annotations.** Every tool declares an
+  `outputSchema` and returns its answer as `structuredContent` beside
+  the text; every tool carries behaviour annotations, and every
+  argument an example. The library exposes the outputs as `GetOutput`,
+  `SetOutput`, `SetMultidocOutput`, `ParseOutput`, `EditOutput` and
+  `ValidateOutput`.
+
+### Changed
+
+- **Release and documentation baseline.** The crate and exact core dependency
+  move to 0.0.46. The README now follows the ecosystem template, with the
+  complete previous guide retained in `docs/README-REFERENCE.md`; comparison,
+  benchmark-method, policy, and compliance pages join the manual.
+
+- **The protocol is the official SDK's.** `rmcp` 3.4 replaces the
+  hand-written JSON-RPC loop. The six tools are unchanged in name,
+  arguments and descriptions; what changed is around them. A stdio
+  client must now open with the handshake (or, in the stateless
+  revision, name its protocol version in `_meta`) before its first
+  request. A missing or mistyped argument is an `isError` result
+  naming the field, rather than `-32602`. An unknown tool is an
+  `isError` result naming the six that exist, for the same reason: the
+  stateless HTTP revision carries `-32602` as an HTTP 400, which a
+  model never reads. A file that cannot be read, YAML that does not
+  parse and a path that does not exist are `isError` results too,
+  carrying the same messages the error envelopes used to; the
+  `noyalib://error-codes` resource now describes both kinds of
+  failure.
+
+- The crate depends on `rmcp`, `tokio`, `axum`, `schemars` and `uuid`.
+  The minimum supported Rust version is **1.88**, the SDK's floor.
+
+- `prompts/get` and `resources/read` are served through the SDK's
+  routers; `resources/list` gains titles, and the tool descriptor
+  resources mirror the live catalogue including the output schemas.
+
+- The example drives a real session with the SDK's client over an
+  in-memory pipe; the example scripts open with the handshake and call
+  the tools by their real names.
+
+### Removed
+
+- `noyalib_mcp::handle_message`, `dispatch`, `error_str`,
+  `HandleOutcome`, `Request`, `Response`, `ErrorResponse`,
+  `ErrorObject`, `SUPPORTED_PROTOCOL_VERSIONS`,
+  `LEGACY_PROTOCOL_VERSION`, `META_PROTOCOL_VERSION_KEY`,
+  `UNSUPPORTED_PROTOCOL_VERSION`, and `tools::descriptors` /
+  `tools::call`. The library is the six functions, their argument and
+  output types, and `YamlServer`. The `fuzz_handle_message` and
+  `fuzz_tool_call` targets are replaced by `tools`, which feeds the
+  stateless functions directly.
+
 ## [v0.0.45] - 2026-09-18
 
 ### Changed
