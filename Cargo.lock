@@ -934,7 +934,7 @@ dependencies = [
 
 [[package]]
 name = "noyalib"
-version = "0.0.46"
+version = "0.0.47"
 dependencies = [
  "hashbrown 0.17.1",
  "indexmap",
@@ -950,7 +950,7 @@ dependencies = [
 
 [[package]]
 name = "noyalib-mcp"
-version = "0.0.46"
+version = "0.0.47"
 dependencies = [
  "axum",
  "criterion",
