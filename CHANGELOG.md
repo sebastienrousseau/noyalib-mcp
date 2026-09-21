@@ -11,6 +11,18 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
+## [v0.0.47] - 2026-09-21
+
+### Changed
+
+- Tracks `noyalib` 0.0.47 under the exact lockstep pin and aligns the server
+  registry and container metadata with the release.
+
+### Fixed
+
+- Aligned MCP integration and YAML-suite fixtures with the core library's
+  explicit single-document contract for `noyalib_get` and `noyalib_set`.
+
 ## [v0.0.46] - 2026-09-20
 
 ### Added
