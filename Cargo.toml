@@ -52,8 +52,3 @@ harness = false
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
-
-# Pre-release resolution for the exact lockstep core pin. Remove this
-# section after noyalib 0.0.51 is published and before tagging this crate.
-[patch.crates-io]
-noyalib = { git = "https://github.com/sebastienrousseau/noyalib", branch = "feat/v0.0.51" }
