@@ -17,6 +17,10 @@ libfuzzer-sys = "0.4"
 [dependencies.noyalib-mcp]
 path = ".."
 
+# Pre-release resolution for the parent manifest's exact core pin.
+[patch.crates-io]
+noyalib = { git = "https://github.com/sebastienrousseau/noyalib", branch = "feat/v0.0.50" }
+
 [[bin]]
 name = "tools"
 path = "fuzz_targets/tools.rs"

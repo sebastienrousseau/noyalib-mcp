@@ -98,10 +98,22 @@ criteria = "safe-to-deploy"
 delta = "0.0.48 -> 0.0.49"
 notes = "Reviewed caller-owned Rayon pool API; all-feature tests, clippy, strict docs, deny, and vet passed."
 
+[[audits.noyalib]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.0.49 -> 0.0.50"
+notes = "Reviewed backpressured async streams and per-document frame limits; Tokio tests, clippy, and strict docs passed."
+
 [[audits.noyalib-mcp]]
 who = "OpenAI Codex"
 criteria = "safe-to-deploy"
 delta = "0.0.48 -> 0.0.49"
+notes = "Reviewed lockstep release metadata; source and behaviour are unchanged."
+
+[[audits.noyalib-mcp]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.0.49 -> 0.0.50"
 notes = "Reviewed lockstep release metadata; source and behaviour are unchanged."
 
 [[audits.pin-project-lite]]
