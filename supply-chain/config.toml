@@ -273,7 +273,7 @@ version = "1.2.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.noyalib]]
-version = "0.0.47"
+version = "0.0.51"
 criteria = "safe-to-deploy"
 
 [[exemptions.noyalib-mcp]]
