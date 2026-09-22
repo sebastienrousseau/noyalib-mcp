@@ -23,3 +23,7 @@ path = "fuzz_targets/tools.rs"
 test = false
 doc = false
 bench = false
+
+# Pre-release resolution for the parent manifest's exact core pin.
+[patch.crates-io]
+noyalib = { git = "https://github.com/sebastienrousseau/noyalib", branch = "feat/v0.0.49" }
