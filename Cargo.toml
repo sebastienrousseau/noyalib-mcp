@@ -1,6 +1,6 @@
 [package]
 name = "noyalib-mcp"
-version = "0.0.51"
+version = "0.0.52"
 edition = "2024"
 rust-version = "1.88.0"
 license = "MIT OR Apache-2.0"
@@ -24,7 +24,7 @@ path = "src/main.rs"
 [dependencies]
 # Strict-lockstep versioning (ADR-0005). Dependabot ignores this
 # dep; bumps are coordinated with the parent noyalib release tag.
-noyalib = { version = "=0.0.51", default-features = false, features = ["std", "validate-schema"] }
+noyalib = { version = "=0.0.52", default-features = false, features = ["std", "validate-schema"] }
 # The official MCP SDK: protocol revisions 2024-11-05 through
 # 2026-07-28, stdio and streamable HTTP. The legacy HTTP+SSE bridge in
 # src/transport.rs is the only protocol code left in this crate.
@@ -52,3 +52,6 @@ harness = false
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
+
+[patch.crates-io]
+noyalib = { git = "https://github.com/sebastienrousseau/noyalib", branch = "feat/v0.0.52" }
