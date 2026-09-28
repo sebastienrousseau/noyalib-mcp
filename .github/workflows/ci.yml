@@ -31,29 +31,29 @@ concurrency:
 
 jobs:
   docs-lint:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-docs-lint.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-docs-lint.yml@c2646cdc88ae816711f06646020201b50e4cb99b
   readme-examples:
     # Every ```rust block in README.md compiles against this crate.
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-readme-examples.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-readme-examples.yml@c2646cdc88ae816711f06646020201b50e4cb99b
   yaml-test-suite:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-yaml-test-suite.yml@4b0b9f502073b73784c6b12b8eaa9cce8e808a11
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-yaml-test-suite.yml@c2646cdc88ae816711f06646020201b50e4cb99b
   cargo-deny:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@c2646cdc88ae816711f06646020201b50e4cb99b
 
   cargo-vet:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-vet.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-vet.yml@c2646cdc88ae816711f06646020201b50e4cb99b
 
   cargo-machete:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@c2646cdc88ae816711f06646020201b50e4cb99b
 
   reuse-lint:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@c2646cdc88ae816711f06646020201b50e4cb99b
 
   docs-strict:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@c2646cdc88ae816711f06646020201b50e4cb99b
 
   verify-signatures:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@c2646cdc88ae816711f06646020201b50e4cb99b
 
   test-matrix:
     # `noyalib-mcp` is a stdio-JSON-RPC server; the OS matrix runs
@@ -61,7 +61,7 @@ jobs:
     # the process-lifecycle + IPC surface differs materially across
     # host operating systems (line endings, path separators, signal
     # handling).
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@c2646cdc88ae816711f06646020201b50e4cb99b
 
   # ── A+ rigor parity with the core (added v0.0.17) ──────────────────
   # The satellite previously ran only the lint/test/supply-chain gates.
@@ -70,7 +70,7 @@ jobs:
   coverage-gate:
     # mcp clears the core's 93/96/94 floor (measured 95.7/98.3/94.4).
     # No feature flags, so --all-features == default.
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-coverage.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-coverage.yml@c2646cdc88ae816711f06646020201b50e4cb99b
     with:
       ignore-filename-regex: ''
       fail-under-functions: 96
@@ -80,7 +80,7 @@ jobs:
   msrv-core:
     # Verifies the declared 1.88.0 floor actually builds. The MCP SDK
     # sets a higher floor than the core crate.
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-msrv-core.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-msrv-core.yml@c2646cdc88ae816711f06646020201b50e4cb99b
     with:
       toolchain: "1.88.0"
 
