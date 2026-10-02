@@ -23,10 +23,10 @@ text a model reads. See
   (`--transport`, `--host`, `--port`, `--version`, `--help`), the
   stdio session, the streamable HTTP listener at `/mcp`, and a bridge
   for the 2024-11-05 HTTP+SSE transport at `/sse` and `/messages/`
-  that the SDK no longer ships a server for. It depends only on the
-  SDK and on a `ServerHandler` passed in — nothing in it knows what
-  the tools are — so it is the same file in every Rust server of the
-  suite.
+  (in `src/transport/sse.rs`) that the SDK no longer ships a server
+  for. It depends only on the SDK and on a `ServerHandler` passed in —
+  nothing in it knows what the tools are — so it is the same module in
+  every Rust server of the suite.
 - **`src/lib.rs`** is the handler: `YamlServer` holds the tool and
   prompt routers, describes the server for `initialize` and
   `server/discover`, serves the resources, and turns a call for a tool
