@@ -9,7 +9,7 @@
   "version": "0.0.52",
   "repository": "https://github.com/sebastienrousseau/noyalib-mcp",
   "homepage": "https://github.com/sebastienrousseau/noyalib-mcp",
-  "license": "MIT OR Apache-2.0",
+  "license": "Apache-2.0 OR MIT",
   "language": "Rust",
   "runtime": "docker",
   "categories": [

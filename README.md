@@ -17,6 +17,11 @@
   <a href="https://scorecard.dev/viewer/?uri=github.com/sebastienrousseau/noyalib-mcp"><img src="https://img.shields.io/ossf-scorecard/github.com/sebastienrousseau/noyalib-mcp?style=for-the-badge&label=OpenSSF%20Scorecard&logo=openssf" alt="OpenSSF Scorecard" /></a>
   <a href="LICENSE-APACHE"><img src="https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg?style=for-the-badge" alt="License: Apache-2.0 OR MIT" /></a>
   <a href="https://github.com/sebastienrousseau/noyalib-mcp/blob/main/docs/POLICIES.md"><img src="https://img.shields.io/badge/MSRV-1.88.0-93450a.svg?style=for-the-badge&logo=rust" alt="MSRV 1.88.0" /></a>
+  <a href="https://glama.ai/mcp/servers/sebastienrousseau/noyalib-mcp"><img src="https://glama.ai/mcp/servers/sebastienrousseau/noyalib-mcp/badges/score.svg" alt="Glama MCP server score" /></a>
+</p>
+
+<p align="center">
+  <img src=".github/demo.gif" alt="noyalib-mcp Demo" width="100%" />
 </p>
 
 ---
@@ -245,5 +250,4 @@ metadata as untrusted input.
 
 ## License
 
-Licensed under either [Apache License 2.0](LICENSE-APACHE) or
-[MIT](LICENSE-MIT), at your option.
+Dual-licensed under either the [Apache License, Version 2.0](LICENSE-APACHE) or the [MIT License](LICENSE-MIT), at your option.

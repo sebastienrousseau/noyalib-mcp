@@ -132,6 +132,50 @@ for fname in ("server.json", "glama.json", "package.json"):
     else:
         bad(fname, got)
 
+# Nested package manifests and their root lockfile entry are release surfaces
+# too. The v0.0.51 LSP crate shipped package-lock.json at 0.0.44 because only
+# package.json was checked; the MCP npm wrapper was deliberately ignored and
+# consequently remained at 0.0.27.
+for rel in (
+    "editors/vscode/package.json",
+    "editors/vscode/package-lock.json",
+    "pkg/npm-wrapper/package.json",
+):
+    f = root / rel
+    if not f.is_file():
+        continue
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        bad(rel, f"invalid JSON: {e}")
+        continue
+    versions = [data.get("version", "")]
+    if rel.endswith("package-lock.json"):
+        versions.append(data.get("packages", {}).get("", {}).get("version", ""))
+    if versions and all(got == version for got in versions):
+        ok(rel, f"version {version}")
+    else:
+        bad(rel, f"root versions {versions} != {version}")
+
+# Generated scorecard snapshots must move with the lockstep family. A stale
+# docs/scorecard.json remained at 0.0.28 while the rendered table advanced.
+scorecard = root / "docs" / "scorecard.json"
+if scorecard.is_file():
+    try:
+        repos = json.loads(scorecard.read_text(encoding="utf-8")).get("repos", {})
+    except json.JSONDecodeError as e:
+        bad("docs/scorecard.json", f"invalid JSON: {e}")
+    else:
+        stale = sorted(
+            f"{repo}={data.get('version', '')}"
+            for repo, data in repos.items()
+            if data.get("version") != version
+        )
+        if stale:
+            bad("docs/scorecard.json", "stale repo versions: " + ", ".join(stale))
+        else:
+            ok("docs/scorecard.json", f"all repo versions {version}")
+
 # Container image tags embedded in those manifests move with the
 # version, or the registry entry points at the previous image.
 for fname in ("server.json", "glama.json"):
