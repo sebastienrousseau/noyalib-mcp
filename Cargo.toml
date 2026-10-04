@@ -53,5 +53,3 @@ harness = false
 unsafe_code = "forbid"
 missing_docs = "warn"
 
-[patch.crates-io]
-noyalib = { git = "https://github.com/sebastienrousseau/noyalib", branch = "feat/v0.0.52" }
