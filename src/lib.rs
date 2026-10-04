@@ -8,8 +8,8 @@
 //! by [`rmcp`], the official MCP SDK; this crate supplies the tools and
 //! the text a model reads. The `noyalib-mcp` binary serves the same
 //! handler over stdio, streamable HTTP or the older HTTP+SSE transport
-//! (see `src/transport.rs`, one file shared with every Rust server of
-//! the suite).
+//! (see `src/transport.rs` and `src/transport/`, shared with every Rust
+//! server of the suite).
 //!
 //! # Why this exists
 //!
