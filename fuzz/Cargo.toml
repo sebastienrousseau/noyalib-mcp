@@ -23,3 +23,6 @@ path = "fuzz_targets/tools.rs"
 test = false
 doc = false
 bench = false
+
+[patch.crates-io]
+noyalib = { git = "https://github.com/sebastienrousseau/noyalib", branch = "feat/v0.0.52" }

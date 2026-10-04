@@ -6,7 +6,7 @@
 
 CARGO ?= cargo
 
-.PHONY: all check clippy test fmt doc deny vet audit reuse spell clean
+.PHONY: all check clippy test fmt doc deny vet audit reuse spell demo clean
 
 all: fmt check clippy test
 
@@ -39,6 +39,9 @@ reuse:
 
 spell:
 	codespell
+
+demo: ## Generate terminal demo GIF using VHS
+	vhs .github/demo.tape
 
 clean:
 	$(CARGO) clean
