@@ -23,4 +23,3 @@ path = "fuzz_targets/tools.rs"
 test = false
 doc = false
 bench = false
-
