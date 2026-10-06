@@ -13,9 +13,19 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ## [v0.0.54] - Unreleased
 
+### Added
+
+- `--root DIR` confines the file tools to one directory.
+
 ### Changed
 
 - Tracks `noyalib` 0.0.54 under the exact lockstep pin.
+- The file tools (`noyalib_get`, `noyalib_set`, `noyalib_set_multidoc`)
+  resolve every `file` argument against the server root, the working
+  directory unless `--root` says otherwise, and refuse a path that lands
+  outside it after symlinks are followed. A client that could reach the
+  server could previously read or rewrite any YAML file the process
+  could open.
 
 ## [v0.0.53] - 2026-10-06
 

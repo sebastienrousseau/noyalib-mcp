@@ -65,7 +65,9 @@
 //!
 //! # Security
 //!
-//! `#![forbid(unsafe_code)]`. No FFI. The file tools read and write
+//! `#![forbid(unsafe_code)]`. No FFI. The file tools are confined to a
+//! root directory (the working directory unless `--root` says
+//! otherwise) and refuse any path that resolves outside it. They read and write
 //! whatever the process may; confine a deployment with container
 //! mounts or systemd `ReadWritePaths=`. The HTTP listeners exist only
 //! when asked for on the command line, bind loopback by default and do
@@ -96,6 +98,7 @@ use rmcp::model::{
 };
 use rmcp::service::RequestContext;
 use rmcp::{RoleServer, ServerHandler, prompt_handler, tool_handler};
+use std::path::{Path, PathBuf};
 
 pub mod prompts;
 pub mod resources;
@@ -125,11 +128,17 @@ const INSTRUCTIONS: &str = "Read and edit YAML files losslessly. \
 /// [`rmcp`].
 ///
 /// Cheap to create and to clone; the HTTP transports create one per
-/// session. It holds no document between calls.
+/// session. It holds no document between calls. Its file tools are
+/// confined to one directory, the `root`.
 #[derive(Debug, Clone)]
 pub struct YamlServer {
     tool_router: ToolRouter<Self>,
     prompt_router: PromptRouter<Self>,
+    /// The directory the file tools may read and write under. Every
+    /// `file` argument is resolved against it and must stay inside it
+    /// after symlinks are followed; anything else is refused before
+    /// the file is opened.
+    root: PathBuf,
 }
 
 impl Default for YamlServer {
@@ -139,12 +148,59 @@ impl Default for YamlServer {
 }
 
 impl YamlServer {
-    /// A server with every tool and prompt registered.
+    /// A server with every tool and prompt registered, its file tools
+    /// confined to the working directory. The binary's `--root <dir>`
+    /// widens or narrows that.
     #[must_use]
     pub fn new() -> Self {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        Self::with_root(cwd)
+    }
+
+    /// A server whose file tools are confined to `root`. The root is
+    /// canonicalised when it exists, so a symlinked temp directory or a
+    /// `..` segment compares the way the kernel resolves it.
+    #[must_use]
+    pub fn with_root(root: PathBuf) -> Self {
+        let root = root.canonicalize().unwrap_or(root);
         Self {
             tool_router: Self::tool_router(),
             prompt_router: Self::prompt_router(),
+            root,
+        }
+    }
+
+    /// The directory the file tools are confined to.
+    #[must_use]
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Resolve a `file` argument against the root and refuse it when
+    /// it points outside, symlinks included. The file must exist: the
+    /// file tools all read it before anything else.
+    ///
+    /// # Errors
+    ///
+    /// The path does not exist, cannot be canonicalised, or lies
+    /// outside the root. The message names the root so a client knows
+    /// what to pass to `--root`.
+    pub fn confine(&self, file: &str) -> Result<PathBuf, String> {
+        let candidate = if Path::new(file).is_absolute() {
+            PathBuf::from(file)
+        } else {
+            self.root.join(file)
+        };
+        let resolved = candidate
+            .canonicalize()
+            .map_err(|e| format!("read {file}: {e}"))?;
+        if resolved.starts_with(&self.root) {
+            Ok(resolved)
+        } else {
+            Err(format!(
+                "{file} is outside the server root {}; start noyalib-mcp with --root to allow it",
+                self.root.display()
+            ))
         }
     }
 }

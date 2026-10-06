@@ -536,7 +536,11 @@ impl YamlServer {
         &self,
         Parameters(args): Parameters<GetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(get(&args.file, &args.path), |_| false)
+        reply(
+            self.confine(&args.file)
+                .and_then(|f| get(&f.to_string_lossy(), &args.path)),
+            |_| false,
+        )
     }
 
     #[tool(
@@ -567,7 +571,16 @@ impl YamlServer {
         &self,
         Parameters(args): Parameters<SetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(set(&args.file, &args.path, &args.value), |_| false)
+        reply(
+            self.confine(&args.file)
+                .and_then(|f| set(&f.to_string_lossy(), &args.path, &args.value))
+                // Echo the path as the client wrote it, not the resolved one.
+                .map(|mut out| {
+                    out.file.clone_from(&args.file);
+                    out
+                }),
+            |_| false,
+        )
     }
 
     #[tool(
@@ -595,7 +608,20 @@ impl YamlServer {
         Parameters(args): Parameters<SetMultidocArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         reply(
-            set_multidoc(&args.file, args.doc_index, &args.path, &args.value),
+            self.confine(&args.file)
+                .and_then(|f| {
+                    set_multidoc(
+                        &f.to_string_lossy(),
+                        args.doc_index,
+                        &args.path,
+                        &args.value,
+                    )
+                })
+                // Echo the path as the client wrote it, not the resolved one.
+                .map(|mut out| {
+                    out.file.clone_from(&args.file);
+                    out
+                }),
             |_| false,
         )
     }
@@ -708,7 +734,9 @@ mod tests {
     }
 
     fn call(tool: &str, v: JsonValue) -> CallToolResult {
-        let server = YamlServer::new();
+        // The fixtures are written under the system temp directory, so
+        // that is the root the file tools are confined to here.
+        let server = YamlServer::with_root(std::env::temp_dir());
         match tool {
             "noyalib_get" => server.noyalib_get(args(v)),
             "noyalib_set" => server.noyalib_set(args(v)),
@@ -1092,5 +1120,66 @@ mod tests {
         };
         assert_eq!(out.to_string(), "{\n  \"a\": 1\n}");
         assert_eq!(internal("boom"), "internal: boom");
+    }
+
+    // ── root confinement ─────────────────────────────────────────────
+
+    #[test]
+    fn a_file_outside_the_root_is_refused_before_it_is_read() {
+        let inside = std::env::temp_dir().join(format!("noyalib-mcp-root-{}", std::process::id()));
+        fs::create_dir_all(&inside).unwrap();
+        let outside = write_temp("outside", "a: 1\n");
+        let server = YamlServer::with_root(inside.clone());
+        let r = server
+            .noyalib_get(args(
+                json!({"file": outside.to_str().unwrap(), "path": "a"}),
+            ))
+            .unwrap();
+        assert_eq!(r.is_error, Some(true));
+        let msg = text_of(&r);
+        assert!(msg.contains("outside the server root"), "{msg}");
+        assert!(msg.contains("--root"), "{msg}");
+        let _ = fs::remove_dir_all(inside);
+        let _ = fs::remove_file(outside);
+    }
+
+    #[test]
+    fn a_relative_path_resolves_against_the_root() {
+        let root = std::env::temp_dir().join(format!("noyalib-mcp-rel-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("c.yml"), "k: v\n").unwrap();
+        let server = YamlServer::with_root(root.clone());
+        let r = server
+            .noyalib_get(args(json!({"file": "c.yml", "path": "k"})))
+            .unwrap();
+        assert_ne!(r.is_error, Some(true), "{}", text_of(&r));
+        assert!(text_of(&r).contains('v'));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_that_escapes_the_root_is_refused() {
+        let root = std::env::temp_dir().join(format!("noyalib-mcp-sym-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let target = write_temp("symtarget", "a: 1\n");
+        std::os::unix::fs::symlink(&target, root.join("link.yml")).unwrap();
+        let server = YamlServer::with_root(root.clone());
+        let r = server
+            .noyalib_set(args(json!({"file": "link.yml", "path": "a", "value": "2"})))
+            .unwrap();
+        assert_eq!(r.is_error, Some(true));
+        assert!(
+            text_of(&r).contains("outside the server root"),
+            "{}",
+            text_of(&r)
+        );
+        assert_eq!(
+            fs::read_to_string(&target).unwrap(),
+            "a: 1\n",
+            "the target must be untouched"
+        );
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_file(target);
     }
 }
