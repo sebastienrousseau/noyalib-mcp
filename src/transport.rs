@@ -130,7 +130,7 @@ pub fn usage(name: &str) -> String {
          \x20 --port <number>     port for the HTTP transports \
          (default {DEFAULT_PORT})\n\
          \x20 --root <dir>        directory the file tools may read and write \
-         (default: the working directory)\n\
+         (default: the working directory, unless that is / or the home directory)\n\
          \x20 --profile <name>    rules every tool parses under: \
          strict (default) or standard\n\
          \x20 --version           print the version and exit\n\
@@ -243,6 +243,34 @@ fn resolve_root(root: Option<&Path>) -> Result<PathBuf, String> {
     }
 }
 
+/// Refuse the working directory as the default root when it is the
+/// filesystem root or the user's home directory: a client that spawns
+/// the server there without `--root` would hand the model every file.
+/// Asked for with `--root`, either is the operator's choice.
+fn refuse_broad_default(root: &Path, home: Option<&Path>) -> Result<(), String> {
+    let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let is_home = home
+        .and_then(|h| h.canonicalize().ok())
+        .is_some_and(|h| h == canonical);
+    if canonical.parent().is_none() || is_home {
+        return Err(format!(
+            "refusing to serve {} without --root: it is the filesystem root \
+             or the home directory; pass --root <dir> to choose the directory \
+             the file tools may use",
+            root.display()
+        ));
+    }
+    Ok(())
+}
+
+/// The user's home directory, from the environment.
+fn home_dir() -> Option<PathBuf> {
+    ["HOME", "USERPROFILE"]
+        .iter()
+        .find_map(|key| std::env::var_os(key).filter(|v| !v.is_empty()))
+        .map(PathBuf::from)
+}
+
 /// Serve `factory`'s handler as `name` according to the command line.
 ///
 /// This is the whole of `main`: parse, serve, and turn the outcome
@@ -272,7 +300,12 @@ where
     };
     // The root is checked once, here, so a typo is a usage error with a
     // message instead of a server that refuses every file.
-    let root = match resolve_root(options.root.as_deref()) {
+    let root = match resolve_root(options.root.as_deref()).and_then(|root| {
+        if options.root.is_none() {
+            refuse_broad_default(&root, home_dir().as_deref())?;
+        }
+        Ok(root)
+    }) {
         Ok(root) => root,
         Err(message) => {
             eprintln!("{name}: {message}\n\n{}", usage(name));
@@ -496,6 +529,15 @@ mod tests {
         let err = resolve_root(Some(Path::new("/definitely/not/here"))).unwrap_err();
         assert!(err.contains("--root"), "{err}");
         assert!(resolve_root(None).is_ok());
+    }
+
+    #[test]
+    fn a_broad_working_directory_is_not_a_default_root() {
+        let tmp = std::env::temp_dir();
+        assert!(refuse_broad_default(Path::new("/"), None).is_err());
+        assert!(refuse_broad_default(&tmp, Some(&tmp)).is_err());
+        assert!(refuse_broad_default(&tmp, None).is_ok());
+        assert!(refuse_broad_default(&tmp, Some(Path::new("/nonexistent"))).is_ok());
     }
 
     #[test]

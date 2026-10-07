@@ -60,6 +60,9 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   lists at most 100 violations (and then says how many there were)
   with each message clipped, and every tool call that runs past 30
   seconds is answered with an error instead of holding the client.
+- Without `--root`, the server refuses to start (exit 2) when its
+  working directory is the filesystem root or the home directory. A
+  client that spawns it from `/` gave the file tools the whole disk.
 
 ### Changed (behaviour)
 
