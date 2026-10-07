@@ -209,8 +209,7 @@ impl YamlServer {
     /// one message whatever is there, and the message does not name
     /// the root.
     pub fn confine(&self, file: &str) -> Result<PathBuf, String> {
-        let at = self.locate(file)?;
-        drop(at);
+        drop(tools::locate(&self.root, file)?);
         let candidate = self.root().join(file);
         let resolved = candidate
             .canonicalize()
@@ -218,22 +217,9 @@ impl YamlServer {
         if resolved.starts_with(self.root()) {
             Ok(resolved)
         } else {
-            Err(outside(file))
+            Err(tools::outside(file))
         }
     }
-
-    /// Find a `file` argument under the root, for the file tools.
-    fn locate(&self, file: &str) -> Result<fsio::Located, String> {
-        self.root.locate(Path::new(file)).map_err(|e| match e {
-            fsio::FileError::Outside => outside(file),
-            fsio::FileError::Io(e) => format!("read {file}: {e}"),
-        })
-    }
-}
-
-/// The one answer for a path outside the root.
-fn outside(file: &str) -> String {
-    format!("{file} is outside the server root; start noyalib-mcp with --root to allow it")
 }
 
 #[tool_handler(router = self.tool_router)]

@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use crate::YamlServer;
-use crate::fsio::Located;
+use crate::fsio::{FileError, Kept, Located, RootDir};
 
 // --- Outputs -------------------------------------------------------------
 
@@ -218,7 +218,12 @@ impl ParseProfile {
 /// The file cannot be read, does not parse, or has no such path. The
 /// message says which.
 pub fn get(file: &str, path: &str) -> Result<GetOutput, String> {
-    get_at(&locate_unconfined(file)?, file, path)
+    get_at(
+        &locate_unconfined(file)?,
+        file,
+        path,
+        &noyalib::ParserConfig::default(),
+    )
 }
 
 /// Locate a file the library functions were given, with no root.
@@ -226,9 +231,24 @@ fn locate_unconfined(file: &str) -> Result<Located, String> {
     Located::unconfined(Path::new(file)).map_err(|e| format!("read {file}: {e}"))
 }
 
+/// Read a located file within `config`'s document size limit.
+fn read_at(
+    at: &Located,
+    file: &str,
+    config: &noyalib::ParserConfig,
+) -> Result<(String, Kept), String> {
+    at.read(config.max_document_length)
+        .map_err(|e| format!("read {file}: {e}"))
+}
+
 /// [`get`] on a file already located; `file` is how to name it.
-pub(crate) fn get_at(at: &Located, file: &str, path: &str) -> Result<GetOutput, String> {
-    let (src, _) = at.read().map_err(|e| format!("read {file}: {e}"))?;
+pub(crate) fn get_at(
+    at: &Located,
+    file: &str,
+    path: &str,
+    config: &noyalib::ParserConfig,
+) -> Result<GetOutput, String> {
+    let (src, _) = read_at(at, file, config)?;
     let doc = parse_document(&src).map_err(|e| format!("parse {file}: {e}"))?;
     match doc.get(path) {
         Some(value) => Ok(GetOutput {
@@ -254,7 +274,13 @@ pub(crate) fn get_at(at: &Located, file: &str, path: &str) -> Result<GetOutput, 
 /// cannot be applied at the path. The file is unchanged on any of
 /// them.
 pub fn set(file: &str, path: &str, value: &str) -> Result<SetOutput, String> {
-    set_at(&locate_unconfined(file)?, file, path, value)
+    set_at(
+        &locate_unconfined(file)?,
+        file,
+        path,
+        value,
+        &noyalib::ParserConfig::default(),
+    )
 }
 
 /// [`set`] on a file already located; `file` is how to name it.
@@ -263,8 +289,9 @@ pub(crate) fn set_at(
     file: &str,
     path: &str,
     value: &str,
+    config: &noyalib::ParserConfig,
 ) -> Result<SetOutput, String> {
-    let (src, kept) = at.read().map_err(|e| format!("read {file}: {e}"))?;
+    let (src, kept) = read_at(at, file, config)?;
     let mut doc = parse_document(&src).map_err(|e| format!("parse {file}: {e}"))?;
     doc.set(path, value)
         .map_err(|e| format!("set {path} = {value}: {e}"))?;
@@ -289,7 +316,9 @@ pub fn set_multidoc(
     path: &str,
     value: &str,
 ) -> Result<SetMultidocOutput, String> {
-    set_multidoc_at(&locate_unconfined(file)?, file, doc_index, path, value)
+    let at = locate_unconfined(file)?;
+    let config = noyalib::ParserConfig::default();
+    set_multidoc_at(&at, file, doc_index, path, value, &config)
 }
 
 /// [`set_multidoc`] on a file already located; `file` is how to name
@@ -300,8 +329,9 @@ pub(crate) fn set_multidoc_at(
     doc_index: usize,
     path: &str,
     value: &str,
+    config: &noyalib::ParserConfig,
 ) -> Result<SetMultidocOutput, String> {
-    let (src, kept) = at.read().map_err(|e| format!("read {file}: {e}"))?;
+    let (src, kept) = read_at(at, file, config)?;
     // parse_stream keeps each `---`-delimited document as its own
     // lossless Document, retaining its separator; concatenating their
     // rendered forms reproduces the stream byte-for-byte, so editing one
@@ -446,6 +476,33 @@ pub fn validate_with_profile(
 /// not each count as an uncovered closure.
 fn internal(e: impl fmt::Display) -> String {
     format!("internal: {e}")
+}
+
+/// Find a `file` argument under the server root.
+pub(crate) fn locate(root: &RootDir, file: &str) -> Result<Located, String> {
+    root.locate(Path::new(file)).map_err(|e| match e {
+        FileError::Outside => outside(file),
+        FileError::Io(e) => format!("read {file}: {e}"),
+    })
+}
+
+/// The one answer for a path outside the root, whatever is there.
+pub(crate) fn outside(file: &str) -> String {
+    format!("{file} is outside the server root; start noyalib-mcp with --root to allow it")
+}
+
+/// Run a tool's work on the blocking pool, off the async workers.
+///
+/// File I/O and parsing block. On a worker thread a slow call would
+/// stall every other request on that worker, `ping` included.
+async fn off_thread<T, F>(work: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tokio::task::spawn_blocking(work)
+        .await
+        .unwrap_or_else(|e| Err(internal(e)))
 }
 
 // --- Arguments -----------------------------------------------------------
@@ -603,15 +660,16 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<GetOutput>()
     )]
-    fn noyalib_get(
+    async fn noyalib_get(
         &self,
         Parameters(args): Parameters<GetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(
-            self.locate(&args.file)
-                .and_then(|at| get_at(&at, &args.file, &args.path)),
-            |_| false,
-        )
+        let (root, config) = (self.root.clone(), self.profile.config());
+        let outcome = off_thread(move || {
+            let at = locate(&root, &args.file)?;
+            get_at(&at, &args.file, &args.path, &config)
+        });
+        reply(outcome.await, |_| false)
     }
 
     #[tool(
@@ -638,15 +696,16 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<SetOutput>()
     )]
-    fn noyalib_set(
+    async fn noyalib_set(
         &self,
         Parameters(args): Parameters<SetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(
-            self.locate(&args.file)
-                .and_then(|at| set_at(&at, &args.file, &args.path, &args.value)),
-            |_| false,
-        )
+        let (root, config) = (self.root.clone(), self.profile.config());
+        let outcome = off_thread(move || {
+            let at = locate(&root, &args.file)?;
+            set_at(&at, &args.file, &args.path, &args.value, &config)
+        });
+        reply(outcome.await, |_| false)
     }
 
     #[tool(
@@ -669,16 +728,22 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<SetMultidocOutput>()
     )]
-    fn noyalib_set_multidoc(
+    async fn noyalib_set_multidoc(
         &self,
         Parameters(args): Parameters<SetMultidocArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(
-            self.locate(&args.file).and_then(|at| {
-                set_multidoc_at(&at, &args.file, args.doc_index, &args.path, &args.value)
-            }),
-            |_| false,
-        )
+        let (root, config) = (self.root.clone(), self.profile.config());
+        let outcome = off_thread(move || {
+            let at = locate(&root, &args.file)?;
+            let SetMultidocArgs {
+                file,
+                doc_index,
+                path,
+                value,
+            } = &args;
+            set_multidoc_at(&at, file, *doc_index, path, value, &config)
+        });
+        reply(outcome.await, |_| false)
     }
 
     #[tool(
@@ -795,26 +860,30 @@ mod tests {
     fn call(tool: &str, v: JsonValue) -> CallToolResult {
         // The fixtures are written under the system temp directory, so
         // that is the root the file tools are confined to here.
-        let server = YamlServer::with_root(std::env::temp_dir());
-        match tool {
-            "noyalib_get" => server.noyalib_get(args(v)),
-            "noyalib_set" => server.noyalib_set(args(v)),
-            "noyalib_set_multidoc" => server.noyalib_set_multidoc(args(v)),
-            "noyalib_parse" => server.noyalib_parse(args(v)),
-            "noyalib_edit" => server.noyalib_edit(args(v)),
-            "noyalib_validate" => server.noyalib_validate(args(v)),
-            other => panic!("no such tool {other}"),
-        }
-        .expect("a tool failure is a result, not a protocol error")
+        call_on(&YamlServer::with_root(std::env::temp_dir()), tool, v)
+    }
+
+    /// One runtime for every test call: the tools run their work on
+    /// its blocking pool.
+    fn runtime() -> &'static tokio::runtime::Runtime {
+        static RT: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+        RT.get_or_init(|| tokio::runtime::Runtime::new().expect("runtime"))
     }
 
     fn call_on(server: &YamlServer, tool: &str, v: JsonValue) -> CallToolResult {
-        match tool {
-            "noyalib_get" => server.noyalib_get(args(v)),
-            "noyalib_set" => server.noyalib_set(args(v)),
-            other => panic!("no such tool {other}"),
-        }
-        .expect("a tool failure is a result, not a protocol error")
+        runtime()
+            .block_on(async {
+                match tool {
+                    "noyalib_get" => server.noyalib_get(args(v)).await,
+                    "noyalib_set" => server.noyalib_set(args(v)).await,
+                    "noyalib_set_multidoc" => server.noyalib_set_multidoc(args(v)).await,
+                    "noyalib_parse" => server.noyalib_parse(args(v)),
+                    "noyalib_edit" => server.noyalib_edit(args(v)),
+                    "noyalib_validate" => server.noyalib_validate(args(v)),
+                    other => panic!("no such tool {other}"),
+                }
+            })
+            .expect("a tool failure is a result, not a protocol error")
     }
 
     fn text_of(r: &CallToolResult) -> &str {
@@ -1198,11 +1267,11 @@ mod tests {
         fs::create_dir_all(&inside).unwrap();
         let outside = write_temp("outside", "a: 1\n");
         let server = YamlServer::with_root(inside.clone());
-        let r = server
-            .noyalib_get(args(
-                json!({"file": outside.to_str().unwrap(), "path": "a"}),
-            ))
-            .unwrap();
+        let r = call_on(
+            &server,
+            "noyalib_get",
+            json!({"file": outside.to_str().unwrap(), "path": "a"}),
+        );
         assert_eq!(r.is_error, Some(true));
         let msg = text_of(&r);
         assert!(msg.contains("outside the server root"), "{msg}");
@@ -1217,9 +1286,11 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("c.yml"), "k: v\n").unwrap();
         let server = YamlServer::with_root(root.clone());
-        let r = server
-            .noyalib_get(args(json!({"file": "c.yml", "path": "k"})))
-            .unwrap();
+        let r = call_on(
+            &server,
+            "noyalib_get",
+            json!({"file": "c.yml", "path": "k"}),
+        );
         assert_ne!(r.is_error, Some(true), "{}", text_of(&r));
         assert!(text_of(&r).contains('v'));
         let _ = fs::remove_dir_all(root);
@@ -1233,9 +1304,11 @@ mod tests {
         let target = write_temp("symtarget", "a: 1\n");
         std::os::unix::fs::symlink(&target, root.join("link.yml")).unwrap();
         let server = YamlServer::with_root(root.clone());
-        let r = server
-            .noyalib_set(args(json!({"file": "link.yml", "path": "a", "value": "2"})))
-            .unwrap();
+        let r = call_on(
+            &server,
+            "noyalib_set",
+            json!({"file": "link.yml", "path": "a", "value": "2"}),
+        );
         assert_eq!(r.is_error, Some(true));
         assert!(
             text_of(&r).contains("outside the server root"),

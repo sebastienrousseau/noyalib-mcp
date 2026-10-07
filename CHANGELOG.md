@@ -40,6 +40,11 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   missing or is unreadable, and no message names the absolute root.
 - Paths are no longer converted to strings and back, so a non-UTF-8
   name cannot be reopened as a different, lossy look-alike.
+- The file tools read only regular files no larger than the profile's
+  document limit (1 MiB strict, 64 MiB standard), checked before
+  reading, and do their file I/O on the blocking pool. A FIFO read per
+  worker thread wedged the whole server, `ping` included, and a 4 GiB
+  file was read into memory before any limit applied.
 
 ## [v0.0.54] - 2026-10-07
 

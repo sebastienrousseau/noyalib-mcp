@@ -186,18 +186,44 @@ impl Located {
     }
 
     /// Read the whole file as UTF-8, with what a replacement keeps.
-    pub(crate) fn read(&self) -> io::Result<(String, Kept)> {
-        let mut file = self.open_read()?;
+    ///
+    /// Only a regular file is read, and only when it is at most `limit`
+    /// bytes: a FIFO or device would block or never end, and a file
+    /// over the limit would be refused by the parser anyway after
+    /// costing its size in memory. The open does not block (a FIFO
+    /// opens at once and is then refused), and the read stops one byte
+    /// past the limit in case the file grew after it was measured.
+    pub(crate) fn read(&self, limit: usize) -> io::Result<(String, Kept)> {
+        let file = self.open_read()?;
         let meta = file.metadata()?;
+        if !meta.is_file() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "not a regular file",
+            ));
+        }
+        let too_big = |size: u64| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("the file is {size} bytes, over the {limit}-byte document limit"),
+            )
+        };
+        let cap = u64::try_from(limit).unwrap_or(u64::MAX);
+        if meta.len() > cap {
+            return Err(too_big(meta.len()));
+        }
         let mut text = String::new();
-        let _ = file.read_to_string(&mut text)?;
+        let read = file.take(cap.saturating_add(1)).read_to_string(&mut text)?;
+        if read > limit {
+            return Err(too_big(read as u64));
+        }
         Ok((text, kept(&meta)))
     }
 
     #[cfg(unix)]
     fn open_read(&self) -> io::Result<std::fs::File> {
         use rustix::fs::{Mode, OFlags};
-        let flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+        let flags = OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC;
         let fd = rustix::fs::openat(&self.dir, &self.name, flags, Mode::empty())?;
         Ok(std::fs::File::from(fd))
     }
@@ -497,7 +523,7 @@ mod tests {
 
     fn read(root: &RootDir, file: &str) -> Result<String, FileError> {
         let at = root.locate(Path::new(file))?;
-        Ok(at.read()?.0)
+        Ok(at.read(1 << 20)?.0)
     }
 
     #[test]
@@ -554,7 +580,7 @@ mod tests {
         // Writing through an in-root symlink replaces its target, not
         // the link.
         let at = root.locate(Path::new("rel.yml")).unwrap();
-        let (_, kept) = at.read().unwrap();
+        let (_, kept) = at.read(1 << 20).unwrap();
         at.replace(b"r: 2\n", kept).unwrap();
         assert!(
             fs::symlink_metadata(dir.join("rel.yml"))
@@ -583,7 +609,7 @@ mod tests {
         symlink(outside.join("victim"), dir.join(".planted")).unwrap();
         let root = RootDir::open(dir.clone());
         let at = root.locate(Path::new("t.yml")).unwrap();
-        let (_, kept) = at.read().unwrap();
+        let (_, kept) = at.read(1 << 20).unwrap();
         let mut first = true;
         let mut names = || {
             if std::mem::take(&mut first) {
