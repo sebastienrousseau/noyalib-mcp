@@ -106,10 +106,11 @@ pub mod resources;
 pub mod tools;
 
 pub use tools::{
-    EditArgs, EditOutput, GetArgs, GetOutput, MAX_FRAGMENT_BYTES, ParseArgs, ParseOutput,
-    ParseProfile, SetArgs, SetMultidocArgs, SetMultidocOutput, SetOutput, TOOL_NAMES, ValidateArgs,
-    ValidateOutput, Violation, edit, edit_with_profile, get, parse, parse_with_profile, set,
-    set_multidoc, validate, validate_with_profile,
+    DEFAULT_CALL_TIMEOUT, EditArgs, EditOutput, GetArgs, GetOutput, MAX_FRAGMENT_BYTES,
+    MAX_SCHEMA_BYTES, MAX_VIOLATIONS, ParseArgs, ParseOutput, ParseProfile, SetArgs,
+    SetMultidocArgs, SetMultidocOutput, SetOutput, TOOL_NAMES, ValidateArgs, ValidateOutput,
+    Violation, edit, edit_with_profile, get, parse, parse_with_profile, set, set_multidoc,
+    validate, validate_with_profile,
 };
 
 /// One hour, in milliseconds: the freshness hint on the cacheable
@@ -143,6 +144,8 @@ pub struct YamlServer {
     root: fsio::RootDir,
     /// The rules the parse tools apply; see [`ParseProfile`].
     profile: ParseProfile,
+    /// How long one tool call may run; see [`Self::with_call_timeout`].
+    call_timeout: std::time::Duration,
 }
 
 impl Default for YamlServer {
@@ -171,6 +174,7 @@ impl YamlServer {
             prompt_router: Self::prompt_router(),
             root: fsio::RootDir::open(root),
             profile: ParseProfile::default(),
+            call_timeout: tools::DEFAULT_CALL_TIMEOUT,
         }
     }
 
@@ -179,6 +183,16 @@ impl YamlServer {
     #[must_use]
     pub fn with_profile(mut self, profile: ParseProfile) -> Self {
         self.profile = profile;
+        self
+    }
+
+    /// The same server answering any tool call that runs longer than
+    /// `limit` with an error ([`DEFAULT_CALL_TIMEOUT`] unless set). The
+    /// work itself cannot be interrupted: it finishes on its blocking
+    /// thread and its result is dropped.
+    #[must_use]
+    pub fn with_call_timeout(mut self, limit: std::time::Duration) -> Self {
+        self.call_timeout = limit;
         self
     }
 

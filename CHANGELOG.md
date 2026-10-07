@@ -56,6 +56,10 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 - Error messages repeat at most 120 bytes of a client's path or value
   and give its length; a refused 40 KB value was echoed in full.
 - The stateless tools run on the blocking pool too.
+- `noyalib_validate` refuses a schema over 64 KiB before compiling it,
+  lists at most 100 violations (and then says how many there were)
+  with each message clipped, and every tool call that runs past 30
+  seconds is answered with an error instead of holding the client.
 
 ### Changed (behaviour)
 
@@ -68,7 +72,9 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 ### Added
 
 - `edit_with_profile`, the `noyalib_edit` counterpart of
-  `parse_with_profile`, and `MAX_FRAGMENT_BYTES`.
+  `parse_with_profile`, `YamlServer::with_call_timeout`, and the
+  constants `MAX_FRAGMENT_BYTES`, `MAX_SCHEMA_BYTES`, `MAX_VIOLATIONS`
+  and `DEFAULT_CALL_TIMEOUT`.
 
 ## [v0.0.54] - 2026-10-07
 

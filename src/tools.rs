@@ -600,24 +600,49 @@ fn parse_for_validation(
     })
 }
 
-/// Every violation of the JSON Schema `schema_text` by `value`.
+/// The largest JSON Schema `noyalib_validate` compiles, in bytes.
+pub const MAX_SCHEMA_BYTES: usize = 64 * 1024;
+
+/// How many violations a verdict lists. Past it, one more entry says
+/// how many there were in all.
+pub const MAX_VIOLATIONS: usize = 100;
+
+/// Every violation of the JSON Schema `schema_text` by `value`, the
+/// first [`MAX_VIOLATIONS`] of them with their messages clipped.
 fn schema_violations(value: &noyalib::Value, schema_text: &str) -> Result<Vec<Violation>, String> {
+    if schema_text.len() > MAX_SCHEMA_BYTES {
+        return Err(format!(
+            "the schema is {} bytes, over the {MAX_SCHEMA_BYTES}-byte schema limit",
+            schema_text.len()
+        ));
+    }
     let schema: JsonValue =
         serde_json::from_str(schema_text).map_err(|e| format!("schema is not JSON: {e}"))?;
     let schema_value: noyalib::Value =
         serde_json::from_value(schema).map_err(|e| format!("schema: {e}"))?;
     let compiled =
         noyalib::CompiledSchema::compile(&schema_value).map_err(|e| format!("schema: {e}"))?;
-    Ok(compiled
-        .iter_errors(value)
-        .map_err(internal)?
+    let all = compiled.iter_errors(value).map_err(internal)?;
+    let mut violations: Vec<Violation> = all
         .iter()
+        .take(MAX_VIOLATIONS)
         .map(|v| Violation {
-            path: v.instance_path.clone(),
+            path: clip(&v.instance_path).into_owned(),
             keyword: v.keyword.clone(),
-            message: v.message.clone(),
+            message: clip(&v.message).into_owned(),
         })
-        .collect())
+        .collect();
+    if all.len() > MAX_VIOLATIONS {
+        violations.push(Violation {
+            path: String::new(),
+            keyword: "truncated".to_owned(),
+            message: format!(
+                "{} violations in all; the first {MAX_VIOLATIONS} are listed",
+                all.len()
+            ),
+        });
+    }
+    Ok(violations)
 }
 
 /// An error no request can provoke (a JSON conversion of a value the
@@ -640,18 +665,29 @@ pub(crate) fn outside(file: &str) -> String {
     format!("{file} is outside the server root; start noyalib-mcp with --root to allow it")
 }
 
-/// Run a tool's work on the blocking pool, off the async workers.
+/// How long one tool call may run before the client is answered with
+/// an error. See [`YamlServer::with_call_timeout`].
+pub const DEFAULT_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Run a tool's work on the blocking pool, off the async workers, and
+/// answer with an error if it outlasts `limit`.
 ///
 /// File I/O and parsing block. On a worker thread a slow call would
-/// stall every other request on that worker, `ping` included.
-async fn off_thread<T, F>(work: F) -> Result<T, String>
+/// stall every other request on that worker, `ping` included. A call
+/// past its time limit is answered at once; its thread cannot be
+/// interrupted and finishes in the background, its result discarded.
+async fn off_thread<T, F>(limit: std::time::Duration, work: F) -> Result<T, String>
 where
     T: Send + 'static,
     F: FnOnce() -> Result<T, String> + Send + 'static,
 {
-    tokio::task::spawn_blocking(work)
-        .await
-        .unwrap_or_else(|e| Err(internal(e)))
+    match tokio::time::timeout(limit, tokio::task::spawn_blocking(work)).await {
+        Ok(joined) => joined.unwrap_or_else(|e| Err(internal(e))),
+        Err(_) => Err(format!(
+            "the call ran past the {} ms time limit and was abandoned",
+            limit.as_millis()
+        )),
+    }
 }
 
 // --- Arguments -----------------------------------------------------------
@@ -814,7 +850,7 @@ impl YamlServer {
         Parameters(args): Parameters<GetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let (root, config) = (self.root.clone(), self.profile.config());
-        let outcome = off_thread(move || {
+        let outcome = off_thread(self.call_timeout, move || {
             let at = locate(&root, &args.file)?;
             get_at(&at, &args.file, &args.path, &config)
         });
@@ -850,7 +886,7 @@ impl YamlServer {
         Parameters(args): Parameters<SetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let (root, config) = (self.root.clone(), self.profile.config());
-        let outcome = off_thread(move || {
+        let outcome = off_thread(self.call_timeout, move || {
             let at = locate(&root, &args.file)?;
             set_at(&at, &args.file, &args.path, &args.value, &config)
         });
@@ -882,7 +918,7 @@ impl YamlServer {
         Parameters(args): Parameters<SetMultidocArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let (root, config) = (self.root.clone(), self.profile.config());
-        let outcome = off_thread(move || {
+        let outcome = off_thread(self.call_timeout, move || {
             let at = locate(&root, &args.file)?;
             let SetMultidocArgs {
                 file,
@@ -921,7 +957,9 @@ impl YamlServer {
         Parameters(args): Parameters<ParseArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let profile = self.profile();
-        let outcome = off_thread(move || parse_with_profile(&args.yaml, profile));
+        let outcome = off_thread(self.call_timeout, move || {
+            parse_with_profile(&args.yaml, profile)
+        });
         reply(outcome.await, |_| false)
     }
 
@@ -947,8 +985,9 @@ impl YamlServer {
         Parameters(args): Parameters<EditArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let profile = self.profile();
-        let outcome =
-            off_thread(move || edit_with_profile(&args.yaml, &args.path, &args.value, profile));
+        let outcome = off_thread(self.call_timeout, move || {
+            edit_with_profile(&args.yaml, &args.path, &args.value, profile)
+        });
         reply(outcome.await, |_| false)
     }
 
@@ -974,8 +1013,9 @@ impl YamlServer {
         Parameters(args): Parameters<ValidateArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         let profile = self.profile();
-        let outcome =
-            off_thread(move || validate_with_profile(&args.yaml, args.schema.as_deref(), profile));
+        let outcome = off_thread(self.call_timeout, move || {
+            validate_with_profile(&args.yaml, args.schema.as_deref(), profile)
+        });
         // An invalid document is a failure the model must see, so it
         // is flagged `isError` -- but it is also a complete verdict, so
         // the structured half is kept.
@@ -1671,6 +1711,56 @@ mod tests {
         assert!(!verdict.valid);
         assert!(verdict.error.unwrap().contains("document limit"));
         assert!(parse_with_profile(&long, ParseProfile::Standard).is_ok());
+    }
+
+    #[test]
+    fn a_schema_over_the_size_limit_is_refused_uncompiled() {
+        let big = format!(
+            "{{\"type\":\"object\",\"description\":\"{}\"}}",
+            "x".repeat(MAX_SCHEMA_BYTES)
+        );
+        let err = validate("a: 1\n", Some(&big)).unwrap_err();
+        assert!(err.contains("schema limit"), "{err}");
+    }
+
+    #[test]
+    fn violations_are_capped_and_clipped() {
+        // Every item fails twice, with a long message: the verdict keeps
+        // the first MAX_VIOLATIONS and says how many there were.
+        let yaml: String = (0..500)
+            .map(|_| format!("- {}\n", "y".repeat(300)))
+            .collect();
+        let schema = r#"{"type":"array","items":{"type":"integer"}}"#;
+        let out = validate_with_profile(&yaml, Some(schema), ParseProfile::Standard).unwrap();
+        assert!(!out.valid);
+        assert_eq!(
+            out.violations.len(),
+            MAX_VIOLATIONS + 1,
+            "{:?}",
+            out.violations.last()
+        );
+        let last = out.violations.last().unwrap();
+        assert!(last.message.contains("500"), "{}", last.message);
+        assert!(out.violations.iter().all(|v| v.message.len() < 400));
+    }
+
+    #[test]
+    fn a_call_over_the_time_limit_is_answered_with_an_error() {
+        let long: String = (0..200_000)
+            .map(|i| format!("k{i}: [1, 2, {{a: b}}]\n"))
+            .collect();
+        let server = YamlServer::with_root(std::env::temp_dir())
+            .with_profile(ParseProfile::Standard)
+            .with_call_timeout(std::time::Duration::from_millis(1));
+        let r = call_on(&server, "noyalib_parse", json!({"yaml": long}));
+        assert!(is_error(&r));
+        assert!(text_of(&r).contains("time limit"), "{}", text_of(&r));
+        let r = call_on(
+            &server.with_call_timeout(DEFAULT_CALL_TIMEOUT),
+            "noyalib_parse",
+            json!({"yaml": "a: 1"}),
+        );
+        assert!(!is_error(&r), "{}", text_of(&r));
     }
 
     // ── parse profile ────────────────────────────────────────────────
