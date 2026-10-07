@@ -32,30 +32,92 @@ Vulnerabilities affecting the underlying `noyalib` YAML engine
 should be reported through the same channel; the coordinated
 patch will land in both repositories simultaneously.
 
-## Threat Model — MCP Server Specific
+## Threat Model and Trust Boundaries
 
-`noyalib-mcp` speaks JSON-RPC 2.0 over stdio (per the Model
-Context Protocol specification). The threat model:
+`noyalib-mcp` is a Model Context Protocol server. Whoever can send it
+JSON-RPC can call every tool; the server has no notion of users and
+does not authenticate. What it guarantees is where the tools can reach
+and how much one request can cost.
 
-- **Untrusted YAML input via `tools/call`**: every `parse` /
-  `format` / `validate` tool invocation feeds the argument's
-  YAML through the same parser hardening path as the library
-  crate. `max_depth`, `max_document_length`, `max_alias_expansions`,
-  `max_mapping_keys`, `max_sequence_length` all apply. AI agents
-  that pipe user-attacker-controlled YAML into this server are
-  bounded by those limits.
-- **Untrusted JSON-RPC frames**: message-length caps enforced
-  before deserialisation to prevent memory exhaustion via
-  outsized `params` blobs.
-- **Subprocess model**: `noyalib-mcp` runs as a child of the
-  MCP client (Claude Desktop, Cursor, Continue.dev, Zed). It
-  never opens listening sockets, never accepts network
-  connections, never writes outside stdout / stderr. `#[forbid(unsafe_code)]`
-  workspace-wide.
-- **Tool inventory stability**: the exposed `tools/list` output
-  is treated as a public API surface. Removing or renaming a
-  tool is a breaking change and requires a major-version bump.
-  A schema-diff regression in CI blocks silent removals.
+### Transports
+
+- **stdio (the default).** The server is a child process of the MCP
+  client (Claude Desktop, Cursor, Zed and the like). The client that
+  holds its stdin is the only caller. No socket is opened.
+- **HTTP (`--transport streamable-http` or `--transport sse`), opt-in.**
+  The server listens on a TCP port, `127.0.0.1` unless `--host` says
+  otherwise. Any process on the machine that can reach the port,
+  including other users' processes, can call every tool. To keep a
+  page in a browser out (DNS rebinding), every request must carry a
+  `Host` the server answers to (the loopback names, or the `--host`
+  name), any `Origin` must be a loopback or `--host` origin, and the
+  SSE message endpoint takes `application/json` only. Binding
+  `0.0.0.0` or `::` turns the `Host` check off; put a gateway that
+  authenticates in front before binding a routable address. At most
+  `--max-sessions` sessions (64 by default) are held at once.
+
+### File tools and the root
+
+- `noyalib_get`, `noyalib_set` and `noyalib_set_multidoc` are confined
+  to one directory, `--root`, or the working directory when it is not
+  given. The server refuses to start without `--root` when the working
+  directory is `/` or the home directory.
+- On unix the root is opened once and every path is walked from that
+  handle one component at a time with `O_NOFOLLOW`. A symlink met on
+  the way is read and followed only while it stays inside the root
+  (a relative target, or an absolute one under the root); one that
+  leaves is refused before anything outside is looked at. The file is
+  read and replaced relative to the directory the walk ended in, so a
+  directory swapped for a symlink mid-request cannot redirect it. On
+  Windows the path is canonicalised and compared with the root, which
+  leaves a window between the check and the open.
+- An absolute `file` argument is accepted only when it starts with the
+  root as given or as canonicalised. A path outside the root draws one
+  message whether it exists or not, and no message names the root.
+- Only regular files are read (a FIFO or device is refused without
+  blocking), and only up to the profile's document limit, checked
+  before reading.
+- A rewrite goes to a new file created exclusively under a random name
+  beside the target, given the target's permission bits (and owner and
+  group, where the process may set them) before any byte is written,
+  synced, then renamed over the target. Extended attributes and ACLs
+  are not carried over, and the file gets a new inode.
+
+What a client can still do inside the root, by design:
+
+- read any regular file that parses as YAML, which includes JSON
+  (`package.json`, `tsconfig.json`), and rewrite any value in it, for
+  example a `scripts` entry or a CI step. Choose the root accordingly;
+- reach a file outside the root through a hard link inside it: a hard
+  link is the file itself, and no path check can tell. Do not let
+  untrusted parties create links in the root.
+
+### Untrusted input
+
+- Every tool parses under noyalib's strict YAML 1.2 profile unless
+  `--profile standard` is given: duplicate keys are errors and the
+  parser's limits for untrusted input apply (`max_depth` 64,
+  `max_document_length` 1 MiB, alias, key, sequence and node budgets).
+  See the parent crate's
+  [Parser Hardening section](https://github.com/sebastienrousseau/noyalib/blob/main/SECURITY.md#parser-hardening).
+- YAML text in a request is refused over the document limit before it
+  is parsed. A replacement value is refused over 256 KiB, or when a
+  linear count of its nesting exceeds `max_depth`, before it is parsed.
+- `noyalib_validate` refuses a schema over 64 KiB and lists at most 100
+  violations. Remote `$ref`s are not fetched.
+- Every tool call runs on a blocking thread under a 30 second limit.
+  Past it the client is answered with an error at once; the thread
+  cannot be interrupted and finishes in the background.
+- There is no JSON-RPC message-size cap of the server's own. A stdio
+  line is read whole, and an HTTP body is bounded by the HTTP stack's
+  defaults (2 MB on the SSE message endpoint).
+- Error messages repeat at most 120 bytes of a client's path or value.
+
+### Tool inventory stability
+
+The `tools/list` output is a public API surface. Removing or renaming
+a tool is a breaking change, held to a 0.x bump while the crate is
+pre-1.0 (see the crate documentation).
 
 ## Security Design
 

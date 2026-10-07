@@ -71,9 +71,13 @@ Install or run the server through the channel that fits the host:
 
 ```bash
 cargo install noyalib-mcp --locked
-npx @sebastienrousseau/noyalib-mcp
 docker run --rm -i ghcr.io/sebastienrousseau/noyalib-mcp:latest
 ```
+
+The npm wrapper (`npx @sebastienrousseau/noyalib-mcp`) runs a binary only
+when its package carries a SHA-256 for your platform. Releases do not yet
+publish per-platform archives, so today it refuses to run and points to
+the two commands above.
 
 ## Requirements
 
@@ -182,13 +186,16 @@ See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) for methodology.
 | `--transport sse` | Serve `/sse` and `/messages/` |
 | `--host ADDRESS` | Bind an HTTP transport to an address |
 | `--port PORT` | Select the HTTP listening port |
-| `--root DIR` | Confine the file tools to DIR (default: the working directory) |
-| `--profile strict\|standard` | Rules for `noyalib_parse` and `noyalib_validate`: noyalib's strict YAML 1.2 profile (the default: duplicate keys and odd indentation are errors, tighter limits) or the library defaults |
+| `--root DIR` | Confine the file tools to DIR (default: the working directory, which may not be `/` or the home directory) |
+| `--profile strict\|standard` | Rules every tool parses under, the file tools and `noyalib_edit` included: noyalib's strict YAML 1.2 profile (the default: duplicate keys and odd indentation are errors, tighter limits) or the library defaults |
+| `--max-sessions N` | Sessions an HTTP transport holds at once (default 64) |
 
 Bind remote transports deliberately. The default loopback host avoids exposing
 the server beyond the local machine. The file tools (`noyalib_get`, `noyalib_set`,
 `noyalib_set_multidoc`) refuse any path that resolves outside the root, symlinks
 included; start the server with `--root` on the directory a client may touch.
+The HTTP transports refuse a foreign `Host` or `Origin` and do not
+authenticate. [`SECURITY.md`](SECURITY.md) has the full trust model.
 
 ## Examples
 

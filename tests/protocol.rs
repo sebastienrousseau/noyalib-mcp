@@ -429,3 +429,34 @@ fn a_bad_argument_is_a_usage_error() {
     assert!(text.contains("telepathy"), "{text}");
     assert!(text.contains("Usage:"), "{text}");
 }
+
+#[test]
+fn the_filesystem_root_or_home_is_never_an_implicit_root() {
+    // A client that spawns the server from `/` or from the user's home
+    // directory, without --root, would hand every file to the model.
+    let home = std::env::temp_dir().join(format!("noyalib-mcp-home-{}", std::process::id()));
+    std::fs::create_dir_all(&home).expect("home");
+    for (cwd, home_env) in [
+        (std::path::Path::new("/"), None),
+        (home.as_path(), Some(&home)),
+    ] {
+        let mut cmd = Command::new(bin());
+        let _ = cmd.current_dir(cwd).stdin(Stdio::null());
+        if let Some(h) = home_env {
+            let _ = cmd.env("HOME", h).env("USERPROFILE", h);
+        }
+        let out = cmd.output().expect("runs");
+        let text = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(2), "cwd {}: {text}", cwd.display());
+        assert!(text.contains("--root"), "{text}");
+    }
+    // Asked for explicitly, either is allowed: the operator chose it.
+    let out = Command::new(bin())
+        .current_dir("/")
+        .args(["--root", "/"])
+        .stdin(Stdio::null())
+        .output()
+        .expect("runs");
+    assert_eq!(out.status.code(), Some(0));
+    let _ = std::fs::remove_dir_all(home);
+}

@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 Noyalib. All rights reserved.
 
-// `noyalib-mcp` — npm-installable wrapper that downloads the
-// platform-appropriate `noyalib-mcp` binary from the matching
-// GitHub Release on first run, caches it under
-// `~/.cache/noyalib-mcp/<version>/`, and exec's into it.
+// `noyalib-mcp`: npm-installable wrapper that downloads the
+// platform-appropriate `noyalib-mcp` binary from the matching GitHub
+// Release on first run, caches it under `~/.cache/noyalib-mcp/<version>/`,
+// and runs it. Every run first checks the binary against the SHA-256 in
+// the package's `digests.json` (see bootstrap.js); without a matching
+// digest nothing is downloaded or run.
 //
 // Lets AI agents (Claude Code, GitHub Copilot, …) call the MCP
 // server with `npx noyalib-mcp` — no Rust toolchain required.

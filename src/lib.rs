@@ -67,12 +67,14 @@
 //!
 //! `#![forbid(unsafe_code)]`. No FFI. The file tools are confined to a
 //! root directory (the working directory unless `--root` says
-//! otherwise) and refuse any path that resolves outside it. They read and write
-//! whatever the process may; confine a deployment with container
-//! mounts or systemd `ReadWritePaths=`. The HTTP listeners exist only
-//! when asked for on the command line, bind loopback by default and do
-//! not authenticate. Resource-limit gates are inherited from
-//! `noyalib`'s `ParserConfig` defaults. Full posture:
+//! otherwise) and refuse any path that resolves outside it; on unix the
+//! check and the open are one walk from a handle on the root. Inside
+//! the root they read and write whatever the process may; confine a
+//! deployment with container mounts or systemd `ReadWritePaths=`. The
+//! HTTP listeners exist only when asked for on the command line, bind
+//! loopback by default, refuse a foreign `Host` or `Origin`, and do not
+//! authenticate. Every tool parses under the `--profile` limits, and
+//! requests are capped in size, nesting and time. Full posture:
 //! [`SECURITY.md`](https://github.com/sebastienrousseau/noyalib-mcp/blob/main/SECURITY.md).
 //!
 //! # API stability and SemVer
@@ -100,15 +102,17 @@ use rmcp::service::RequestContext;
 use rmcp::{RoleServer, ServerHandler, prompt_handler, tool_handler};
 use std::path::{Path, PathBuf};
 
+mod fsio;
 pub mod prompts;
 pub mod resources;
 pub mod tools;
 
 pub use tools::{
-    EditArgs, EditOutput, GetArgs, GetOutput, ParseArgs, ParseOutput, ParseProfile, SetArgs,
+    DEFAULT_CALL_TIMEOUT, EditArgs, EditOutput, GetArgs, GetOutput, MAX_FRAGMENT_BYTES,
+    MAX_SCHEMA_BYTES, MAX_VIOLATIONS, ParseArgs, ParseOutput, ParseProfile, SetArgs,
     SetMultidocArgs, SetMultidocOutput, SetOutput, TOOL_NAMES, ValidateArgs, ValidateOutput,
-    Violation, edit, get, parse, parse_with_profile, set, set_multidoc, validate,
-    validate_with_profile,
+    Violation, edit, edit_with_profile, get, parse, parse_with_profile, set, set_multidoc,
+    validate, validate_with_profile,
 };
 
 /// One hour, in milliseconds: the freshness hint on the cacheable
@@ -135,13 +139,15 @@ const INSTRUCTIONS: &str = "Read and edit YAML files losslessly. \
 pub struct YamlServer {
     tool_router: ToolRouter<Self>,
     prompt_router: PromptRouter<Self>,
-    /// The directory the file tools may read and write under. Every
-    /// `file` argument is resolved against it and must stay inside it
-    /// after symlinks are followed; anything else is refused before
-    /// the file is opened.
-    root: PathBuf,
+    /// The directory the file tools may read and write under, held
+    /// open. Every `file` argument is walked from it one component at
+    /// a time; a path or symlink that leads outside is refused, and
+    /// nothing outside is looked at.
+    root: fsio::RootDir,
     /// The rules the parse tools apply; see [`ParseProfile`].
     profile: ParseProfile,
+    /// How long one tool call may run; see [`Self::with_call_timeout`].
+    call_timeout: std::time::Duration,
 }
 
 impl Default for YamlServer {
@@ -165,16 +171,16 @@ impl YamlServer {
     /// `..` segment compares the way the kernel resolves it.
     #[must_use]
     pub fn with_root(root: PathBuf) -> Self {
-        let root = root.canonicalize().unwrap_or(root);
         Self {
             tool_router: Self::tool_router(),
             prompt_router: Self::prompt_router(),
-            root,
+            root: fsio::RootDir::open(root),
             profile: ParseProfile::default(),
+            call_timeout: tools::DEFAULT_CALL_TIMEOUT,
         }
     }
 
-    /// The same server with `noyalib_parse` and `noyalib_validate`
+    /// The same server with every tool
     /// parsing under `profile` instead of the strict default.
     #[must_use]
     pub fn with_profile(mut self, profile: ParseProfile) -> Self {
@@ -182,7 +188,17 @@ impl YamlServer {
         self
     }
 
-    /// The rules `noyalib_parse` and `noyalib_validate` apply.
+    /// The same server answering any tool call that runs longer than
+    /// `limit` with an error ([`DEFAULT_CALL_TIMEOUT`] unless set). The
+    /// work itself cannot be interrupted: it finishes on its blocking
+    /// thread and its result is dropped.
+    #[must_use]
+    pub fn with_call_timeout(mut self, limit: std::time::Duration) -> Self {
+        self.call_timeout = limit;
+        self
+    }
+
+    /// The rules every tool parses under.
     #[must_use]
     pub fn profile(&self) -> ParseProfile {
         self.profile
@@ -191,34 +207,33 @@ impl YamlServer {
     /// The directory the file tools are confined to.
     #[must_use]
     pub fn root(&self) -> &Path {
-        &self.root
+        self.root.path()
     }
 
     /// Resolve a `file` argument against the root and refuse it when
-    /// it points outside, symlinks included. The file must exist: the
-    /// file tools all read it before anything else.
+    /// it points outside, symlinks included.
+    ///
+    /// The file tools do not use this: they open the file in the same
+    /// walk that checks it (see `src/fsio.rs`), so nothing can be
+    /// swapped between the check and the open. A caller that reopens
+    /// the returned path by name has that race.
     ///
     /// # Errors
     ///
-    /// The path does not exist, cannot be canonicalised, or lies
-    /// outside the root. The message names the root so a client knows
-    /// what to pass to `--root`.
+    /// The path does not exist or cannot be canonicalised (inside the
+    /// root), or lies outside the root. A path outside the root draws
+    /// one message whatever is there, and the message does not name
+    /// the root.
     pub fn confine(&self, file: &str) -> Result<PathBuf, String> {
-        let candidate = if Path::new(file).is_absolute() {
-            PathBuf::from(file)
-        } else {
-            self.root.join(file)
-        };
+        drop(tools::locate(&self.root, file)?);
+        let candidate = self.root().join(file);
         let resolved = candidate
             .canonicalize()
             .map_err(|e| format!("read {file}: {e}"))?;
-        if resolved.starts_with(&self.root) {
+        if resolved.starts_with(self.root()) {
             Ok(resolved)
         } else {
-            Err(format!(
-                "{file} is outside the server root {}; start noyalib-mcp with --root to allow it",
-                self.root.display()
-            ))
+            Err(tools::outside(file))
         }
     }
 }

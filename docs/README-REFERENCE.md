@@ -49,8 +49,10 @@ For environments without a Rust toolchain (the typical AI-agent
 deployment shape):
 
 ```bash
-# npm wrapper — auto-downloads the matching binary on first run,
-# caches under ~/.cache/noyalib-mcp/<version>/.
+# npm wrapper: downloads the matching binary on first run, checks it
+# against the SHA-256 in the package, caches it under
+# ~/.cache/noyalib-mcp/<version>/. It refuses to run until releases
+# publish per-platform archives and their digests.
 npx @sebastienrousseau/noyalib-mcp
 
 # Container — multi-arch (linux/amd64, linux/arm64).
