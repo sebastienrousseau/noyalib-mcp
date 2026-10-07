@@ -230,7 +230,16 @@ impl Located {
 
     #[cfg(not(unix))]
     fn open_read(&self) -> io::Result<std::fs::File> {
-        std::fs::File::open(self.dir.join(&self.name))
+        // Windows refuses to open a directory with "Access is denied";
+        // say what the Unix path says instead.
+        let path = self.dir.join(&self.name);
+        if std::fs::metadata(&path).is_ok_and(|m| !m.is_file()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "not a regular file",
+            ));
+        }
+        std::fs::File::open(path)
     }
 
     /// Replace the file with `bytes`: write a new file beside it and
