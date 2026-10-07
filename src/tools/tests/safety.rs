@@ -214,7 +214,7 @@ fn a_schema_over_the_size_limit_is_refused_uncompiled() {
 #[test]
 fn violations_are_capped_and_clipped() {
     // Every item fails twice, with a long message: the verdict keeps
-    // the first MAX_VIOLATIONS and says how many there were.
+    // the first MAX_VIOLATIONS and says the list was cut short.
     let yaml: String = (0..500)
         .map(|_| format!("- {}\n", "y".repeat(300)))
         .collect();
@@ -228,8 +228,18 @@ fn violations_are_capped_and_clipped() {
         out.violations.last()
     );
     let last = out.violations.last().unwrap();
-    assert!(last.message.contains("500"), "{}", last.message);
+    assert_eq!(last.keyword, "truncated");
+    assert!(last.message.contains("more than"), "{}", last.message);
     assert!(out.violations.iter().all(|v| v.message.len() < 400));
+}
+
+#[test]
+fn exactly_the_cap_is_listed_without_a_truncation_entry() {
+    let yaml: String = (0..MAX_VIOLATIONS).map(|_| "- y\n").collect();
+    let schema = r#"{"type":"array","items":{"type":"integer"}}"#;
+    let out = validate_with_profile(&yaml, Some(schema), ParseProfile::Standard).unwrap();
+    assert_eq!(out.violations.len(), MAX_VIOLATIONS);
+    assert!(out.violations.iter().all(|v| v.keyword != "truncated"));
 }
 
 #[test]

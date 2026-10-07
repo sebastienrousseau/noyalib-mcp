@@ -16,6 +16,10 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 ### Changed
 
 - Tracks `noyalib` 0.0.55 under the exact lockstep pin.
+- `noyalib_validate` asks the core for one violation past its cap of
+  100 and no longer counts the rest, so a hostile document costs at
+  most 101 violations. The `truncated` entry now reads "more than 100
+  violations" instead of giving the total.
 
 ### Fixed
 

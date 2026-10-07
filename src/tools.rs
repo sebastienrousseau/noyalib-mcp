@@ -499,7 +499,8 @@ fn parse_for_validation(
 pub const MAX_SCHEMA_BYTES: usize = 64 * 1024;
 
 /// How many violations a verdict lists. Past it, one more entry says
-/// how many there were in all.
+/// the list was cut short. The core stops collecting one past this cap,
+/// so a verdict never costs more than `MAX_VIOLATIONS + 1` violations.
 pub const MAX_VIOLATIONS: usize = 100;
 
 /// Compile a client's JSON Schema, refusing one over
@@ -515,11 +516,15 @@ fn compile_schema(schema_text: &str) -> Result<noyalib::CompiledSchema, String> 
         serde_json::from_str(schema_text).map_err(|e| format!("schema is not JSON: {e}"))?;
     let schema_value: noyalib::Value =
         serde_json::from_value(schema).map_err(|e| format!("schema: {e}"))?;
-    noyalib::CompiledSchema::compile(&schema_value).map_err(|e| format!("schema: {e}"))
+    noyalib::CompiledSchema::builder(&schema_value)
+        .max_errors(MAX_VIOLATIONS + 1)
+        .build()
+        .map_err(|e| format!("schema: {e}"))
 }
 
-/// Every violation of the JSON Schema `schema_text` by `value`, the
-/// first [`MAX_VIOLATIONS`] of them with their messages clipped.
+/// The violations of the JSON Schema `schema_text` by `value`: the
+/// first [`MAX_VIOLATIONS`] of them with their messages clipped, and a
+/// `truncated` entry when there were more.
 fn schema_violations(value: &noyalib::Value, schema_text: &str) -> Result<Vec<Violation>, String> {
     let compiled = compile_schema(schema_text)?;
     let all = compiled.iter_errors(value).map_err(internal)?;
@@ -537,8 +542,7 @@ fn schema_violations(value: &noyalib::Value, schema_text: &str) -> Result<Vec<Vi
             path: String::new(),
             keyword: "truncated".to_owned(),
             message: format!(
-                "{} violations in all; the first {MAX_VIOLATIONS} are listed",
-                all.len()
+                "more than {MAX_VIOLATIONS} violations; the first {MAX_VIOLATIONS} are listed"
             ),
         });
     }
