@@ -66,6 +66,10 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 - The HTTP transports hold at most 64 sessions at once (`--max-sessions`
   sets it). A client could open sessions faster than they expire:
   20,000 were accepted.
+- The `format_and_lint_yaml` prompt escapes its `file` argument
+  (backticks, backslashes, control characters) and cuts it at 256
+  characters, so it stays one quoted name instead of adding lines to
+  the text the model reads as the user's.
 
 ### Changed (behaviour)
 
