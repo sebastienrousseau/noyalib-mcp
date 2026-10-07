@@ -14,9 +14,18 @@ noyalib-mcp                           # spawns the MCP server over stdio
 ```
 
 The wrapper downloads the platform-appropriate `noyalib-mcp`
-binary from the matching GitHub Release on first run, caches it
-under `~/.cache/noyalib-mcp/<version>/`, then `exec`'s into it.
-Subsequent invocations reuse the cached binary.
+archive from the matching GitHub Release on first run, checks it
+against the SHA-256 recorded in the package's `digests.json`, unpacks
+it, checks the binary, and caches it under
+`~/.cache/noyalib-mcp/<version>/`. The cached binary is checked again
+before every run. Downloads are https only and follow redirects only
+to GitHub's release hosts.
+
+It fails closed: when the package carries no digest for your platform
+it downloads and runs nothing, and says so. Releases up to and
+including 0.0.54 ship no per-platform archives and no `digests.json`,
+so for those use `cargo install noyalib-mcp --locked` or the container
+`ghcr.io/sebastienrousseau/noyalib-mcp`.
 
 ## Why a wrapper?
 
@@ -28,20 +37,10 @@ server with no install step.
 
 ## Verifying the downloaded binary
 
-The download URL is over HTTPS to `github.com`, and the binary
-inside the archive is signed with cosign keyless. To verify by
-hand before trusting the cached copy:
-
-```bash
-cosign verify-blob \
-    --certificate-identity-regexp 'https://github.com/sebastienrousseau/noyalib/' \
-    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-    --certificate ~/.cache/noyalib-mcp/<version>/noyalib-mcp.pem \
-    --signature   ~/.cache/noyalib-mcp/<version>/noyalib-mcp.sig \
-    ~/.cache/noyalib-mcp/<version>/noyalib-mcp
-```
-
-See [`pkg/VERIFY.md`](../VERIFY.md) for the full cookbook.
+The wrapper does this itself on every run. `digests.json` lists, per
+target, the archive name, the archive's SHA-256 and the binary's
+SHA-256; it is part of the npm package, so its provenance attestation
+covers it (`npm audit signatures`).
 
 ## License
 

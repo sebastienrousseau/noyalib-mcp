@@ -76,6 +76,16 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   implements it: stdio by default, HTTP opt-in on loopback with its
   `Host`/`Origin` checks and no authentication, root confinement and
   its limits (hard links, JSON files), and every size and time cap.
+- The npm wrapper runs nothing it cannot verify. It reads the archive
+  name and the SHA-256 of the archive and of the binary from a
+  `digests.json` inside the npm package, checks the archive before
+  unpacking it and the binary after, re-checks the cached binary before
+  every run, downloads over https only and follows redirects only to
+  GitHub's release hosts (at most five). Without a digest for the
+  platform it downloads nothing and names `cargo install` and the
+  container instead. Before, it ran whatever the download produced and
+  a cached binary unchecked, and the asset it asked for was never
+  published, so it could not work for anyone.
 
 ### Changed (behaviour)
 

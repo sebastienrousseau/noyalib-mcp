@@ -71,9 +71,13 @@ Install or run the server through the channel that fits the host:
 
 ```bash
 cargo install noyalib-mcp --locked
-npx @sebastienrousseau/noyalib-mcp
 docker run --rm -i ghcr.io/sebastienrousseau/noyalib-mcp:latest
 ```
+
+The npm wrapper (`npx @sebastienrousseau/noyalib-mcp`) runs a binary only
+when its package carries a SHA-256 for your platform. Releases do not yet
+publish per-platform archives, so today it refuses to run and points to
+the two commands above.
 
 ## Requirements
 
