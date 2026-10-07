@@ -207,18 +207,34 @@ fn apply_flag(
     let value = inline
         .or_else(|| rest.next())
         .ok_or_else(|| format!("{flag} needs a value"))?;
+    set_option(options, flag, value)
+}
+
+/// Set the option a known `flag` names to `value`.
+fn set_option(options: &mut Options, flag: &str, value: String) -> Result<(), String> {
     match flag {
-        "--transport" => options.transport = parse_transport(&value)?,
-        "--port" => options.port = parse_port(&value)?,
         "--root" => options.root = Some(PathBuf::from(value)),
-        "--max-sessions" => options.max_sessions = parse_max_sessions(&value)?,
-        "--profile" => {
-            options.profile = ParseProfile::from_name(&value)
-                .ok_or_else(|| format!("unknown profile `{value}`; choose strict or standard"))?;
-        }
-        _ => options.host = value,
+        "--host" => options.host = value,
+        _ => set_parsed(options, flag, &value)?,
     }
     Ok(())
+}
+
+/// Set an option whose value must parse: transport, port, session
+/// limit or profile.
+fn set_parsed(options: &mut Options, flag: &str, value: &str) -> Result<(), String> {
+    match flag {
+        "--transport" => options.transport = parse_transport(value)?,
+        "--port" => options.port = parse_port(value)?,
+        "--max-sessions" => options.max_sessions = parse_max_sessions(value)?,
+        _ => options.profile = parse_profile(value)?,
+    }
+    Ok(())
+}
+
+fn parse_profile(name: &str) -> Result<ParseProfile, String> {
+    ParseProfile::from_name(name)
+        .ok_or_else(|| format!("unknown profile `{name}`; choose strict or standard"))
 }
 
 fn parse_transport(name: &str) -> Result<Transport, String> {
@@ -280,12 +296,46 @@ fn refuse_broad_default(root: &Path, home: Option<&Path>) -> Result<(), String> 
     Ok(())
 }
 
+/// The root `options` ask for, checked: `--root`, or a working
+/// directory that is neither `/` nor the home directory.
+fn chosen_root(options: &Options) -> Result<PathBuf, String> {
+    let root = resolve_root(options.root.as_deref())?;
+    if options.root.is_none() {
+        refuse_broad_default(&root, home_dir().as_deref())?;
+    }
+    Ok(root)
+}
+
 /// The user's home directory, from the environment.
 fn home_dir() -> Option<PathBuf> {
     ["HOME", "USERPROFILE"]
         .iter()
         .find_map(|key| std::env::var_os(key).filter(|v| !v.is_empty()))
         .map(PathBuf::from)
+}
+
+/// The options to serve with, or the exit status when the command line
+/// asked for help or the version (printed here) or did not parse.
+fn options_to_serve<I>(name: &str, version: &str, args: I) -> Result<Options, ExitCode>
+where
+    I: IntoIterator,
+    I::Item: Into<String>,
+{
+    match parse(args) {
+        Ok(Command::Serve(options)) => Ok(options),
+        Ok(Command::Help) => {
+            println!("{}", usage(name));
+            Err(ExitCode::SUCCESS)
+        }
+        Ok(Command::Version) => {
+            println!("{name} {version}");
+            Err(ExitCode::SUCCESS)
+        }
+        Err(message) => {
+            eprintln!("{name}: {message}\n\n{}", usage(name));
+            Err(ExitCode::from(2))
+        }
+    }
 }
 
 /// Serve `factory`'s handler as `name` according to the command line.
@@ -300,29 +350,13 @@ where
     I: IntoIterator,
     I::Item: Into<String>,
 {
-    let options = match parse(args) {
-        Ok(Command::Serve(options)) => options,
-        Ok(Command::Help) => {
-            println!("{}", usage(name));
-            return ExitCode::SUCCESS;
-        }
-        Ok(Command::Version) => {
-            println!("{name} {version}");
-            return ExitCode::SUCCESS;
-        }
-        Err(message) => {
-            eprintln!("{name}: {message}\n\n{}", usage(name));
-            return ExitCode::from(2);
-        }
+    let options = match options_to_serve(name, version, args) {
+        Ok(options) => options,
+        Err(code) => return code,
     };
     // The root is checked once, here, so a typo is a usage error with a
     // message instead of a server that refuses every file.
-    let root = match resolve_root(options.root.as_deref()).and_then(|root| {
-        if options.root.is_none() {
-            refuse_broad_default(&root, home_dir().as_deref())?;
-        }
-        Ok(root)
-    }) {
+    let root = match chosen_root(&options) {
         Ok(root) => root,
         Err(message) => {
             eprintln!("{name}: {message}\n\n{}", usage(name));
@@ -469,167 +503,4 @@ use sessions::CappedSessions;
 use sse::serve_sse;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn no_arguments_means_stdio() {
-        assert_eq!(
-            parse(Vec::<String>::new()),
-            Ok(Command::Serve(Options::default()))
-        );
-    }
-
-    #[test]
-    fn the_http_transports_take_host_and_port() {
-        let want = Options {
-            transport: Transport::StreamableHttp,
-            host: "0.0.0.0".to_owned(),
-            port: 9000,
-            root: None,
-            profile: ParseProfile::Strict,
-            max_sessions: DEFAULT_MAX_SESSIONS,
-        };
-        assert_eq!(
-            parse([
-                "--transport",
-                "streamable-http",
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "9000"
-            ]),
-            Ok(Command::Serve(want.clone()))
-        );
-        // `--flag=value` is the same as `--flag value`.
-        assert_eq!(
-            parse([
-                "--transport=streamable-http",
-                "--host=0.0.0.0",
-                "--port=9000"
-            ]),
-            Ok(Command::Serve(want))
-        );
-        assert_eq!(
-            parse(["--transport", "sse"]),
-            Ok(Command::Serve(Options {
-                transport: Transport::Sse,
-                ..Options::default()
-            }))
-        );
-    }
-
-    #[test]
-    fn root_is_a_path_option() {
-        assert_eq!(
-            parse(["--root", "/srv/yaml"]),
-            Ok(Command::Serve(Options {
-                root: Some(PathBuf::from("/srv/yaml")),
-                ..Options::default()
-            }))
-        );
-        assert!(parse(["--root"]).is_err_and(|e| e.contains("needs a value")));
-    }
-
-    #[test]
-    fn profile_defaults_to_strict_and_takes_standard() {
-        assert_eq!(Options::default().profile, ParseProfile::Strict);
-        assert_eq!(
-            parse(["--profile", "standard"]),
-            Ok(Command::Serve(Options {
-                profile: ParseProfile::Standard,
-                ..Options::default()
-            }))
-        );
-        assert!(parse(["--profile", "lax"]).is_err_and(|e| e.contains("lax")));
-    }
-
-    #[test]
-    fn max_sessions_takes_a_positive_count() {
-        assert_eq!(
-            parse(["--max-sessions", "3"]),
-            Ok(Command::Serve(Options {
-                max_sessions: 3,
-                ..Options::default()
-            }))
-        );
-        for bad in ["0", "-1", "many"] {
-            assert!(parse(["--max-sessions", bad]).is_err_and(|e| e.contains(bad)));
-        }
-    }
-
-    #[test]
-    fn a_missing_root_is_a_usage_error() {
-        let err = resolve_root(Some(Path::new("/definitely/not/here"))).unwrap_err();
-        assert!(err.contains("--root"), "{err}");
-        assert!(resolve_root(None).is_ok());
-    }
-
-    #[test]
-    fn a_broad_working_directory_is_not_a_default_root() {
-        let tmp = std::env::temp_dir();
-        assert!(refuse_broad_default(Path::new("/"), None).is_err());
-        assert!(refuse_broad_default(&tmp, Some(&tmp)).is_err());
-        assert!(refuse_broad_default(&tmp, None).is_ok());
-        assert!(refuse_broad_default(&tmp, Some(Path::new("/nonexistent"))).is_ok());
-    }
-
-    #[test]
-    fn help_and_version_win_over_everything_else() {
-        assert_eq!(parse(["--help"]), Ok(Command::Help));
-        assert_eq!(parse(["-h"]), Ok(Command::Help));
-        assert_eq!(parse(["--version"]), Ok(Command::Version));
-        assert_eq!(parse(["--transport", "sse", "-V"]), Ok(Command::Version));
-    }
-
-    #[test]
-    fn bad_arguments_are_named() {
-        assert!(
-            parse(["--transport", "carrier-pigeon"]).is_err_and(|e| e.contains("carrier-pigeon"))
-        );
-        assert!(parse(["--port", "eighty"]).is_err_and(|e| e.contains("eighty")));
-        assert!(parse(["--port", "70000"]).is_err_and(|e| e.contains("70000")));
-        assert!(parse(["--port"]).is_err_and(|e| e.contains("needs a value")));
-        assert!(parse(["--bogus"]).is_err_and(|e| e.contains("--bogus")));
-    }
-
-    #[test]
-    fn flags_split_on_the_first_equals_and_unknown_ones_stop_parsing() {
-        // An unknown flag fails before anything after it is read, even a
-        // flag that would otherwise win.
-        assert!(parse(["--bogus", "--help"]).is_err_and(|e| e.contains("--bogus")));
-        assert!(parse(["--bogus=1"]).is_err_and(|e| e.contains("`--bogus`")));
-        // Only the first `=` separates the value.
-        match parse(["--transport=sse", "--host=a=b", "--port=0"]) {
-            Ok(Command::Serve(options)) => {
-                assert_eq!(options.transport, Transport::Sse);
-                assert_eq!(options.host, "a=b");
-                assert_eq!(options.port, 0);
-            }
-            other => panic!("expected serve, got {other:?}"),
-        }
-        // A value-taking flag reads the next argument as its value.
-        assert!(parse(["--host", "--help"]).is_ok_and(|c| matches!(
-            c,
-            Command::Serve(Options { ref host, .. }) if host == "--help"
-        )));
-    }
-
-    #[test]
-    fn the_usage_text_names_every_flag_and_path() {
-        let text = usage("any-mcp");
-        for needle in [
-            "any-mcp",
-            "--transport",
-            "--host",
-            "--port",
-            "--version",
-            "--help",
-            STREAMABLE_HTTP_PATH,
-            SSE_PATH,
-            MESSAGE_PATH,
-        ] {
-            assert!(text.contains(needle), "usage lacks {needle}:\n{text}");
-        }
-    }
-}
+mod tests;
