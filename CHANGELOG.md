@@ -57,6 +57,14 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   and give its length; a refused 40 KB value was echoed in full.
 - The stateless tools run on the blocking pool too.
 
+### Changed (behaviour)
+
+- `--profile` now applies to the CST tools too: `noyalib_get`,
+  `noyalib_set`, `noyalib_set_multidoc` and `noyalib_edit` parse under
+  the profile's rules and limits. Under the default strict profile a
+  file with duplicate keys or odd indentation is refused where it was
+  read last-wins before; `--profile standard` restores that.
+
 ### Added
 
 - `edit_with_profile`, the `noyalib_edit` counterpart of

@@ -174,7 +174,7 @@ impl YamlServer {
         }
     }
 
-    /// The same server with `noyalib_parse` and `noyalib_validate`
+    /// The same server with every tool
     /// parsing under `profile` instead of the strict default.
     #[must_use]
     pub fn with_profile(mut self, profile: ParseProfile) -> Self {
@@ -182,7 +182,7 @@ impl YamlServer {
         self
     }
 
-    /// The rules `noyalib_parse` and `noyalib_validate` apply.
+    /// The rules every tool parses under.
     #[must_use]
     pub fn profile(&self) -> ParseProfile {
         self.profile

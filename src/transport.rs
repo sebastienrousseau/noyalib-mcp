@@ -131,7 +131,7 @@ pub fn usage(name: &str) -> String {
          (default {DEFAULT_PORT})\n\
          \x20 --root <dir>        directory the file tools may read and write \
          (default: the working directory)\n\
-         \x20 --profile <name>    rules for noyalib_parse and noyalib_validate: \
+         \x20 --profile <name>    rules every tool parses under: \
          strict (default) or standard\n\
          \x20 --version           print the version and exit\n\
          \x20 --help              print this text and exit\n\

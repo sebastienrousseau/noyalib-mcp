@@ -17,7 +17,7 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 
-use noyalib::cst::{parse_document, parse_stream};
+use noyalib::cst::{parse_document_with_config, parse_stream_with_config};
 use rmcp::handler::server::tool::schema_for_output;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ContentBlock, ErrorData};
@@ -166,15 +166,17 @@ impl fmt::Display for ValidateOutput {
 
 // --- Parse profile ------------------------------------------------------
 
-/// The rules `noyalib_parse` and `noyalib_validate` parse under.
+/// The rules every tool parses under.
 ///
 /// The server's input is whatever a client sends, so the default is
 /// noyalib's strict YAML 1.2 profile, the one built for untrusted
 /// input: duplicate keys are an error rather than last-wins, only
 /// `true` and `false` are booleans, indentation must be even, and the
 /// tighter resource limits apply. `--profile standard` restores the
-/// library defaults. The file tools and `noyalib_edit` go through the
-/// lossless CST and are not affected.
+/// library defaults. The file tools and `noyalib_edit` parse through
+/// the lossless CST under the same rules and limits, and the profile's
+/// document limit also caps the size of a file read and of YAML text
+/// in a request.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ParseProfile {
     /// `ParserConfig::strict()`.
@@ -249,7 +251,7 @@ pub(crate) fn get_at(
     config: &noyalib::ParserConfig,
 ) -> Result<GetOutput, String> {
     let (src, _) = read_at(at, file, config)?;
-    let doc = parse_document(&src).map_err(|e| format!("parse {file}: {e}"))?;
+    let doc = parse_document_with_config(&src, config).map_err(|e| format!("parse {file}: {e}"))?;
     match doc.get(path) {
         Some(value) => Ok(GetOutput {
             value: value.to_string(),
@@ -293,7 +295,8 @@ pub(crate) fn set_at(
 ) -> Result<SetOutput, String> {
     let (src, kept) = read_at(at, file, config)?;
     check_fragment(value, config)?;
-    let mut doc = parse_document(&src).map_err(|e| format!("parse {file}: {e}"))?;
+    let mut doc =
+        parse_document_with_config(&src, config).map_err(|e| format!("parse {file}: {e}"))?;
     doc.set(path, value)
         .map_err(|e| set_failed(path, value, &e))?;
     at.replace(doc.to_string().as_bytes(), kept)
@@ -337,7 +340,8 @@ pub(crate) fn set_multidoc_at(
     // lossless Document, retaining its separator; concatenating their
     // rendered forms reproduces the stream byte-for-byte, so editing one
     // document leaves every other document untouched.
-    let mut docs = parse_stream(&src).map_err(|e| format!("parse {file}: {e}"))?;
+    let mut docs =
+        parse_stream_with_config(&src, config).map_err(|e| format!("parse {file}: {e}"))?;
     if doc_index >= docs.len() {
         return Err(format!(
             "doc_index {doc_index} out of range: stream has {} document(s)",
@@ -413,7 +417,7 @@ pub fn edit_with_profile(
     let config = profile.config();
     check_text(yaml, &config)?;
     check_fragment(value, &config)?;
-    let mut doc = parse_document(yaml).map_err(|e| format!("parse: {e}"))?;
+    let mut doc = parse_document_with_config(yaml, &config).map_err(|e| format!("parse: {e}"))?;
     doc.set(path, value)
         .map_err(|e| set_failed(path, value, &e))?;
     Ok(EditOutput {
@@ -1693,6 +1697,44 @@ mod tests {
                 .unwrap()
                 .valid
         );
+    }
+
+    #[test]
+    fn the_cst_tools_follow_the_profile() {
+        // Strict refuses duplicate keys; the CST tools now agree with
+        // noyalib_parse instead of taking the last value.
+        let root = scratch_dir("cst-profile");
+        fs::write(root.join("dup.yml"), "a: 1\na: 2\n").unwrap();
+        fs::write(root.join("dup2.yml"), "x: 0\n---\na: 1\na: 2\n").unwrap();
+        let strict = YamlServer::with_root(root.clone());
+        let dup = "a: 1\na: 2\n";
+        for (tool, a) in [
+            ("noyalib_get", json!({"file": "dup.yml", "path": "a"})),
+            (
+                "noyalib_set",
+                json!({"file": "dup.yml", "path": "a", "value": "3"}),
+            ),
+            (
+                "noyalib_set_multidoc",
+                json!({"file": "dup2.yml", "doc_index": 1, "path": "a", "value": "3"}),
+            ),
+            (
+                "noyalib_edit",
+                json!({"yaml": dup, "path": "a", "value": "3"}),
+            ),
+        ] {
+            let r = call_on(&strict, tool, a.clone());
+            assert!(is_error(&r), "{tool}: {}", text_of(&r));
+            assert!(
+                text_of(&r).to_lowercase().contains("duplicate"),
+                "{tool}: {}",
+                text_of(&r)
+            );
+            let standard = strict.clone().with_profile(ParseProfile::Standard);
+            let r = call_on(&standard, tool, a);
+            assert!(!is_error(&r), "{tool} under standard: {}", text_of(&r));
+        }
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
