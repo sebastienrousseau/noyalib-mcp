@@ -227,8 +227,9 @@ fn parse_port(text: &str) -> Result<u16, String> {
 fn resolve_root(root: Option<&Path>) -> Result<PathBuf, String> {
     let chosen = match root {
         Some(r) => r.to_path_buf(),
-        None => std::env::current_dir()
-            .map_err(|e| format!("cannot read the working directory: {e}"))?,
+        // An unreadable working directory falls back to `.`, which the
+        // canonicalisation below then reports with its own error.
+        None => std::env::current_dir().unwrap_or(PathBuf::from(".")),
     };
     let canonical = chosen
         .canonicalize()

@@ -156,7 +156,7 @@ impl YamlServer {
     /// widens or narrows that.
     #[must_use]
     pub fn new() -> Self {
-        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let cwd = std::env::current_dir().unwrap_or(PathBuf::from("."));
         Self::with_root(cwd)
     }
 
@@ -326,5 +326,30 @@ mod tests {
         for name in prompts::PROMPT_NAMES {
             assert!(s.prompt_router.has_route(name), "{name}");
         }
+    }
+
+    #[test]
+    fn the_default_server_is_rooted_at_the_working_directory_and_strict() {
+        let s = YamlServer::default();
+        let cwd = std::env::current_dir().unwrap().canonicalize().unwrap();
+        assert_eq!(s.root(), cwd.as_path());
+        assert_eq!(s.profile(), ParseProfile::Strict);
+        let standard = s.with_profile(ParseProfile::Standard);
+        assert_eq!(standard.profile(), ParseProfile::Standard);
+    }
+
+    #[test]
+    fn confine_reports_a_missing_file_and_accepts_one_inside() {
+        let root = std::env::temp_dir().join(format!("noyalib-mcp-confine-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("in.yml"), "a: 1\n").unwrap();
+        let s = YamlServer::with_root(root.clone());
+        assert!(
+            s.confine("missing.yml")
+                .is_err_and(|e| e.contains("missing.yml"))
+        );
+        let inside = s.confine("in.yml").unwrap();
+        assert!(inside.starts_with(s.root()));
+        let _ = std::fs::remove_dir_all(root);
     }
 }
