@@ -317,7 +317,7 @@ where
         Transport::Sse => {
             let listener = bind(options).await?;
             announce(&listener, SSE_PATH)?;
-            serve_sse(listener, factory).await
+            serve_sse(listener, options, factory).await
         }
     }
 }
@@ -389,11 +389,13 @@ where
     // an operator who binds another interface has chosen to be
     // reachable by it, so that name is allowed too. Binding every
     // interface means there is no name to check against.
-    if options.host == "0.0.0.0" || options.host == "::" {
-        config = config.disable_allowed_hosts();
-    } else if !config.allowed_hosts.contains(&options.host) {
-        config.allowed_hosts.push(options.host.clone());
+    // A browser page also carries its own origin; only a local one is
+    // served. A client that is not a browser sends no `Origin`.
+    config = match guard::allowed_hosts(&options.host) {
+        Some(hosts) => config.with_allowed_hosts(hosts),
+        None => config.disable_allowed_hosts(),
     }
+    .with_allowed_origins(guard::allowed_origins(&options.host));
     let service = StreamableHttpService::new(
         move || Ok(factory()),
         LocalSessionManager::default().into(),
@@ -408,6 +410,7 @@ where
         .await
 }
 
+mod guard;
 mod sse;
 use sse::serve_sse;
 

@@ -89,8 +89,19 @@ impl Http {
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
             .expect("timeout");
+        // A caller-supplied `Host` replaces the default, which is how a
+        // test plays a page that reached the server through DNS
+        // rebinding.
+        let host = headers
+            .iter()
+            .find(|(n, _)| n.eq_ignore_ascii_case("host"))
+            .map_or(addr, |(_, v)| *v);
         let mut request =
-            format!("{method} {path} HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n");
+            format!("{method} {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n");
+        let headers: Vec<_> = headers
+            .iter()
+            .filter(|(n, _)| !n.eq_ignore_ascii_case("host"))
+            .collect();
         for (name, value) in headers {
             let _ = write!(request, "{name}: {value}\r\n");
         }
@@ -651,6 +662,71 @@ fn sse_refuses_what_it_cannot_route() {
         std::thread::sleep(Duration::from_millis(100));
     }
     assert_eq!(gone, 404, "the session outlived its stream");
+}
+
+const EVIL_HOST: (&str, &str) = ("Host", "evil.example");
+const EVIL_ORIGIN: (&str, &str) = ("Origin", "http://evil.example");
+
+#[test]
+fn sse_refuses_a_foreign_host_or_origin() {
+    // A page that rebound its own name to 127.0.0.1 carries that name
+    // in `Host` and `Origin`. Neither route may serve it.
+    let server = Server::start("sse");
+    for bad in [EVIL_HOST, EVIL_ORIGIN] {
+        let r = Http::send(&server.addr, "GET", "/sse", &[bad], "");
+        assert_eq!(r.status, 403, "GET /sse with {bad:?}");
+    }
+    let mut stream = Http::send(&server.addr, "GET", "/sse", &[], "");
+    let (_, endpoint) = stream.next_event();
+    let ping = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+    for bad in [EVIL_HOST, EVIL_ORIGIN] {
+        let r = Http::send(&server.addr, "POST", &endpoint, &[bad, JSON], ping);
+        assert_eq!(r.status, 403, "POST with {bad:?}");
+    }
+    // A loopback origin, the server's own, is a local client.
+    let own = ("Origin", "http://localhost:1234");
+    let r = Http::send(&server.addr, "POST", &endpoint, &[own, JSON], ping);
+    assert_eq!(r.status, 202);
+    assert_eq!(stream.next_message()["id"], 1);
+}
+
+#[test]
+fn sse_takes_json_posts_only() {
+    // `text/plain` is what a browser may send cross-origin without a
+    // preflight, so it is refused rather than parsed.
+    let server = Server::start("sse");
+    let mut stream = Http::send(&server.addr, "GET", "/sse", &[], "");
+    let (_, endpoint) = stream.next_event();
+    let ping = r#"{"jsonrpc":"2.0","id":1,"method":"ping"}"#;
+    for headers in [&[("Content-Type", "text/plain")][..], &[][..]] {
+        let r = Http::send(&server.addr, "POST", &endpoint, headers, ping);
+        assert_eq!(r.status, 415, "{headers:?}");
+    }
+    let charset = ("Content-Type", "application/json; charset=utf-8");
+    let r = Http::send(&server.addr, "POST", &endpoint, &[charset], ping);
+    assert_eq!(r.status, 202);
+    assert_eq!(stream.next_message()["id"], 1);
+}
+
+#[test]
+fn streamable_http_refuses_a_foreign_origin() {
+    let server = Server::start("streamable-http");
+    let r = Http::send(
+        &server.addr,
+        "POST",
+        "/mcp",
+        &[ACCEPT_BOTH, JSON, EVIL_ORIGIN],
+        &initialize("2025-11-25"),
+    );
+    assert_eq!(r.status, 403);
+    let r = Http::send(
+        &server.addr,
+        "POST",
+        "/mcp",
+        &[ACCEPT_BOTH, JSON, ("Origin", "http://127.0.0.1:9")],
+        &initialize("2025-11-25"),
+    );
+    assert_eq!(r.status, 200);
 }
 
 #[test]

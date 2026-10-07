@@ -17,6 +17,14 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 - Tracks `noyalib` 0.0.55 under the exact lockstep pin.
 
+### Fixed
+
+- `--transport sse` now refuses a request whose `Host` is not one the
+  server answers to or whose `Origin` is not local (403), and a posted
+  message that is not `application/json` (415). A web page that rebound
+  its name to 127.0.0.1 could open the stream and call every tool.
+  Streamable HTTP also refuses a non-local `Origin` now.
+
 ## [v0.0.54] - 2026-10-07
 
 ### Added

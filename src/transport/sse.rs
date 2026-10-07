@@ -18,7 +18,7 @@ use std::task::{Context, Poll};
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -30,7 +30,8 @@ use serde::Deserialize;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 
-use super::{MESSAGE_PATH, SSE_PATH, interrupted};
+use super::guard::{Guard, require_json};
+use super::{MESSAGE_PATH, Options, SSE_PATH, interrupted};
 
 /// One session's inbox: the channel its posted messages go down.
 type Inbox = mpsc::Sender<ClientJsonRpcMessage>;
@@ -44,6 +45,8 @@ struct SseState<H> {
     sessions: Sessions,
     /// Cancelled when the server stops, ending every session.
     shutdown: CancellationToken,
+    /// The `Host` and `Origin` checks both routes apply.
+    guard: Guard,
 }
 
 /// `?sessionId=...` on the message endpoint.
@@ -53,7 +56,11 @@ struct SessionQuery {
     session_id: String,
 }
 
-pub(super) async fn serve_sse<H, F>(listener: TcpListener, factory: F) -> io::Result<()>
+pub(super) async fn serve_sse<H, F>(
+    listener: TcpListener,
+    options: &Options,
+    factory: F,
+) -> io::Result<()>
 where
     H: ServerHandler,
     F: Fn() -> H + Send + Sync + 'static,
@@ -63,6 +70,7 @@ where
         factory: Box::new(factory),
         sessions: Sessions::default(),
         shutdown: shutdown.clone(),
+        guard: Guard::for_bind_host(&options.host),
     });
     let router = Router::new()
         .route(SSE_PATH, get(open_stream::<H>))
@@ -84,7 +92,13 @@ where
 /// The first event is `endpoint`, naming where this session's
 /// messages are posted. Every message the server sends after that is a
 /// `message` event carrying one JSON-RPC message.
-async fn open_stream<H: ServerHandler>(State(state): State<Arc<SseState<H>>>) -> Response {
+async fn open_stream<H: ServerHandler>(
+    State(state): State<Arc<SseState<H>>>,
+    headers: HeaderMap,
+) -> Response {
+    if let Err(refused) = state.guard.check(&headers) {
+        return refused.into_response();
+    }
     let id = uuid::Uuid::new_v4().simple().to_string();
     let (inbox, from_client) = mpsc::channel::<ClientJsonRpcMessage>(32);
     let (to_client, outbox) = mpsc::channel::<ServerJsonRpcMessage>(32);
@@ -137,8 +151,16 @@ async fn open_stream<H: ServerHandler>(State(state): State<Arc<SseState<H>>>) ->
 async fn post_message<H: ServerHandler>(
     State(state): State<Arc<SseState<H>>>,
     Query(query): Query<SessionQuery>,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    if let Err(refused) = state
+        .guard
+        .check(&headers)
+        .and_then(|()| require_json(&headers))
+    {
+        return refused.into_response();
+    }
     let message: ClientJsonRpcMessage = match serde_json::from_slice(&body) {
         Ok(message) => message,
         Err(e) => {
@@ -212,6 +234,7 @@ mod tests {
             factory: Box::new(|| ()),
             sessions: Sessions::default(),
             shutdown: CancellationToken::new(),
+            guard: Guard::for_bind_host("127.0.0.1"),
         };
         assert_eq!(format!("{state:?}"), "SseState { .. }");
     }
