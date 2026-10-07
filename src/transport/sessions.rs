@@ -129,6 +129,12 @@ impl SessionManager for CappedSessions {
     }
 
     async fn restore_session(&self, id: SessionId) -> Outcome<RestoreOutcome<Transport>> {
+        // A restore re-creates a session, so it counts against the cap
+        // like `create_session`; one already in memory adds nothing.
+        let present = self.inner.sessions.read().await.contains_key(&id);
+        if !present && self.inner.sessions.read().await.len() >= self.max {
+            return Err(CappedError::Full(self.max));
+        }
         let restored = self.inner.restore_session(id).await;
         restored.map_err(CappedError::Inner)
     }
@@ -168,7 +174,7 @@ mod tests {
     #[tokio::test]
     async fn restore_is_passed_through() {
         // Only an HTTP service with a session store calls this, and
-        // this server configures none; the wrapper only forwards it.
+        // this server configures none.
         let sessions = CappedSessions::new(4);
         let id: SessionId = "restored".into();
         let first = sessions.restore_session(id.clone()).await.unwrap();
@@ -176,5 +182,16 @@ mod tests {
         let again = sessions.restore_session(id.clone()).await.unwrap();
         assert!(matches!(again, RestoreOutcome::AlreadyPresent));
         assert!(sessions.has_session(&id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn restore_counts_against_the_cap() {
+        let sessions = CappedSessions::new(1);
+        let id: SessionId = "restored".into();
+        assert!(sessions.restore_session(id.clone()).await.is_ok());
+        let err = sessions.restore_session("another".into()).await.err();
+        assert!(matches!(err, Some(CappedError::Full(1))), "{err:?}");
+        let again = sessions.restore_session(id).await.unwrap();
+        assert!(matches!(again, RestoreOutcome::AlreadyPresent));
     }
 }

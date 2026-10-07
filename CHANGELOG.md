@@ -69,7 +69,8 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   client that spawns it from `/` gave the file tools the whole disk.
 - The HTTP transports hold at most 64 sessions at once (`--max-sessions`
   sets it). A client could open sessions faster than they expire:
-  20,000 were accepted.
+  20,000 were accepted. A session restored from a session store counts
+  against the same limit.
 - The `format_and_lint_yaml` prompt escapes its `file` argument
   (backticks, backslashes, control characters) and cuts it at 256
   characters, so it stays one quoted name instead of adding lines to
