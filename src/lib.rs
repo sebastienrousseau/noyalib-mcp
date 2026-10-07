@@ -105,9 +105,10 @@ pub mod resources;
 pub mod tools;
 
 pub use tools::{
-    EditArgs, EditOutput, GetArgs, GetOutput, ParseArgs, ParseOutput, SetArgs, SetMultidocArgs,
-    SetMultidocOutput, SetOutput, TOOL_NAMES, ValidateArgs, ValidateOutput, Violation, edit, get,
-    parse, set, set_multidoc, validate,
+    EditArgs, EditOutput, GetArgs, GetOutput, ParseArgs, ParseOutput, ParseProfile, SetArgs,
+    SetMultidocArgs, SetMultidocOutput, SetOutput, TOOL_NAMES, ValidateArgs, ValidateOutput,
+    Violation, edit, get, parse, parse_with_profile, set, set_multidoc, validate,
+    validate_with_profile,
 };
 
 /// One hour, in milliseconds: the freshness hint on the cacheable
@@ -139,6 +140,8 @@ pub struct YamlServer {
     /// after symlinks are followed; anything else is refused before
     /// the file is opened.
     root: PathBuf,
+    /// The rules the parse tools apply; see [`ParseProfile`].
+    profile: ParseProfile,
 }
 
 impl Default for YamlServer {
@@ -167,7 +170,22 @@ impl YamlServer {
             tool_router: Self::tool_router(),
             prompt_router: Self::prompt_router(),
             root,
+            profile: ParseProfile::default(),
         }
+    }
+
+    /// The same server with `noyalib_parse` and `noyalib_validate`
+    /// parsing under `profile` instead of the strict default.
+    #[must_use]
+    pub fn with_profile(mut self, profile: ParseProfile) -> Self {
+        self.profile = profile;
+        self
+    }
+
+    /// The rules `noyalib_parse` and `noyalib_validate` apply.
+    #[must_use]
+    pub fn profile(&self) -> ParseProfile {
+        self.profile
     }
 
     /// The directory the file tools are confined to.

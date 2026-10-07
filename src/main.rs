@@ -28,6 +28,6 @@ fn main() -> ExitCode {
         "noyalib-mcp",
         env!("CARGO_PKG_VERSION"),
         std::env::args().skip(1),
-        noyalib_mcp::YamlServer::with_root,
+        |root, profile| noyalib_mcp::YamlServer::with_root(root).with_profile(profile),
     )
 }

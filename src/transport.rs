@@ -32,6 +32,8 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
+
+use noyalib_mcp::ParseProfile;
 use std::process::ExitCode;
 
 use axum::Router;
@@ -87,6 +89,8 @@ pub struct Options {
     /// The directory the file tools are confined to; `None` means the
     /// working directory.
     pub root: Option<PathBuf>,
+    /// The rules the parse tools apply.
+    pub profile: ParseProfile,
 }
 
 impl Default for Options {
@@ -96,6 +100,7 @@ impl Default for Options {
             host: DEFAULT_HOST.to_owned(),
             port: DEFAULT_PORT,
             root: None,
+            profile: ParseProfile::default(),
         }
     }
 }
@@ -116,7 +121,7 @@ pub enum Command {
 pub fn usage(name: &str) -> String {
     format!(
         "Usage: {name} [--transport <stdio|streamable-http|sse>] \
-         [--host <address>] [--port <number>] [--root <dir>]\n\
+         [--host <address>] [--port <number>] [--root <dir>] [--profile <strict|standard>]\n\
          \n\
          Options:\n\
          \x20 --transport <name>  stdio (default), streamable-http, or sse\n\
@@ -126,6 +131,8 @@ pub fn usage(name: &str) -> String {
          (default {DEFAULT_PORT})\n\
          \x20 --root <dir>        directory the file tools may read and write \
          (default: the working directory)\n\
+         \x20 --profile <name>    rules for noyalib_parse and noyalib_validate: \
+         strict (default) or standard\n\
          \x20 --version           print the version and exit\n\
          \x20 --help              print this text and exit\n\
          \n\
@@ -182,7 +189,10 @@ fn apply_flag(
     inline: Option<String>,
     rest: &mut dyn Iterator<Item = String>,
 ) -> Result<(), String> {
-    if !matches!(flag, "--transport" | "--host" | "--port" | "--root") {
+    if !matches!(
+        flag,
+        "--transport" | "--host" | "--port" | "--root" | "--profile"
+    ) {
         return Err(format!("unknown argument `{flag}`"));
     }
     let value = inline
@@ -192,6 +202,10 @@ fn apply_flag(
         "--transport" => options.transport = parse_transport(&value)?,
         "--port" => options.port = parse_port(&value)?,
         "--root" => options.root = Some(PathBuf::from(value)),
+        "--profile" => {
+            options.profile = ParseProfile::from_name(&value)
+                .ok_or_else(|| format!("unknown profile `{value}`; choose strict or standard"))?;
+        }
         _ => options.host = value,
     }
     Ok(())
@@ -234,7 +248,7 @@ fn resolve_root(root: Option<&Path>) -> Result<PathBuf, String> {
 pub fn run<H, F, I>(name: &str, version: &str, args: I, factory: F) -> ExitCode
 where
     H: ServerHandler,
-    F: Fn(PathBuf) -> H + Send + Sync + 'static,
+    F: Fn(PathBuf, ParseProfile) -> H + Send + Sync + 'static,
     I: IntoIterator,
     I::Item: Into<String>,
 {
@@ -262,7 +276,8 @@ where
             return ExitCode::from(2);
         }
     };
-    let make = move || factory(root.clone());
+    let profile = options.profile;
+    let make = move || factory(root.clone(), profile);
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(e) => {
@@ -414,6 +429,7 @@ mod tests {
             host: "0.0.0.0".to_owned(),
             port: 9000,
             root: None,
+            profile: ParseProfile::Strict,
         };
         assert_eq!(
             parse([
@@ -454,6 +470,19 @@ mod tests {
             }))
         );
         assert!(parse(["--root"]).is_err_and(|e| e.contains("needs a value")));
+    }
+
+    #[test]
+    fn profile_defaults_to_strict_and_takes_standard() {
+        assert_eq!(Options::default().profile, ParseProfile::Strict);
+        assert_eq!(
+            parse(["--profile", "standard"]),
+            Ok(Command::Serve(Options {
+                profile: ParseProfile::Standard,
+                ..Options::default()
+            }))
+        );
+        assert!(parse(["--profile", "lax"]).is_err_and(|e| e.contains("lax")));
     }
 
     #[test]

@@ -16,6 +16,8 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 ### Added
 
 - `--root DIR` confines the file tools to one directory.
+- `--profile strict|standard` chooses the rules `noyalib_parse` and
+  `noyalib_validate` apply.
 
 ### Changed
 
@@ -26,6 +28,13 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   outside it after symlinks are followed. A client that could reach the
   server could previously read or rewrite any YAML file the process
   could open.
+- `noyalib_parse` and `noyalib_validate` parse under noyalib's strict
+  YAML 1.2 profile by default, the one built for untrusted input:
+  duplicate keys are an error instead of last-wins, only `true` and
+  `false` are booleans, indentation must be even, and the tighter
+  resource limits apply. Text the standard profile accepted may now be
+  refused; start the server with `--profile standard` for the previous
+  behaviour.
 
 ## [v0.0.53] - 2026-10-06
 
