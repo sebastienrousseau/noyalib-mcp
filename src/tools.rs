@@ -161,6 +161,47 @@ impl fmt::Display for ValidateOutput {
     }
 }
 
+// --- Parse profile ------------------------------------------------------
+
+/// The rules `noyalib_parse` and `noyalib_validate` parse under.
+///
+/// The server's input is whatever a client sends, so the default is
+/// noyalib's strict YAML 1.2 profile, the one built for untrusted
+/// input: duplicate keys are an error rather than last-wins, only
+/// `true` and `false` are booleans, indentation must be even, and the
+/// tighter resource limits apply. `--profile standard` restores the
+/// library defaults. The file tools and `noyalib_edit` go through the
+/// lossless CST and are not affected.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ParseProfile {
+    /// `ParserConfig::strict()`.
+    #[default]
+    Strict,
+    /// `ParserConfig::default()`, the library's YAML 1.2 defaults.
+    Standard,
+}
+
+impl ParseProfile {
+    /// Parse a `--profile` value.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "strict" => Some(Self::Strict),
+            "standard" => Some(Self::Standard),
+            _ => None,
+        }
+    }
+
+    /// The parser configuration this profile stands for.
+    #[must_use]
+    pub fn config(self) -> noyalib::ParserConfig {
+        match self {
+            Self::Strict => noyalib::ParserConfig::strict(),
+            Self::Standard => noyalib::ParserConfig::default(),
+        }
+    }
+}
+
 // --- The functions -------------------------------------------------------
 
 /// Read the value at `path` in the YAML file `file`.
@@ -255,7 +296,18 @@ pub fn set_multidoc(
 ///
 /// The text does not parse under the library's limits.
 pub fn parse(yaml: &str) -> Result<ParseOutput, String> {
-    let docs = noyalib::load_all_as::<noyalib::Value>(yaml).map_err(|e| format!("parse: {e}"))?;
+    parse_with_profile(yaml, ParseProfile::default())
+}
+
+/// [`parse`] under an explicit [`ParseProfile`].
+///
+/// # Errors
+///
+/// The text does not parse under the profile's rules and limits.
+pub fn parse_with_profile(yaml: &str, profile: ParseProfile) -> Result<ParseOutput, String> {
+    let docs: Vec<noyalib::Value> = noyalib::load_all_with_config(yaml, &profile.config())
+        .and_then(Iterator::collect)
+        .map_err(|e| format!("parse: {e}"))?;
     let documents = docs
         .into_iter()
         .map(|d| serde_json::to_value(d.untag()).map_err(internal))
@@ -291,7 +343,21 @@ pub fn edit(yaml: &str, path: &str, value: &str) -> Result<EditOutput, String> {
 /// The schema is not JSON or not a valid schema. Nothing was
 /// validated, so there is no verdict.
 pub fn validate(yaml: &str, schema: Option<&str>) -> Result<ValidateOutput, String> {
-    let value = match noyalib::from_str::<noyalib::Value>(yaml) {
+    validate_with_profile(yaml, schema, ParseProfile::default())
+}
+
+/// [`validate`] under an explicit [`ParseProfile`].
+///
+/// # Errors
+///
+/// The schema is not valid JSON or not a valid JSON Schema. A document
+/// that fails to parse or to validate is a result, not an error.
+pub fn validate_with_profile(
+    yaml: &str,
+    schema: Option<&str>,
+    profile: ParseProfile,
+) -> Result<ValidateOutput, String> {
+    let value = match noyalib::from_str_with_config::<noyalib::Value>(yaml, &profile.config()) {
         Ok(v) => v,
         Err(e) => {
             let (line, column) = e.location().map_or((0, 0), |l| (l.line(), l.column()));
@@ -536,7 +602,11 @@ impl YamlServer {
         &self,
         Parameters(args): Parameters<GetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(get(&args.file, &args.path), |_| false)
+        reply(
+            self.confine(&args.file)
+                .and_then(|f| get(&f.to_string_lossy(), &args.path)),
+            |_| false,
+        )
     }
 
     #[tool(
@@ -567,7 +637,16 @@ impl YamlServer {
         &self,
         Parameters(args): Parameters<SetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(set(&args.file, &args.path, &args.value), |_| false)
+        reply(
+            self.confine(&args.file)
+                .and_then(|f| set(&f.to_string_lossy(), &args.path, &args.value))
+                // Echo the path as the client wrote it, not the resolved one.
+                .map(|mut out| {
+                    out.file.clone_from(&args.file);
+                    out
+                }),
+            |_| false,
+        )
     }
 
     #[tool(
@@ -595,7 +674,20 @@ impl YamlServer {
         Parameters(args): Parameters<SetMultidocArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         reply(
-            set_multidoc(&args.file, args.doc_index, &args.path, &args.value),
+            self.confine(&args.file)
+                .and_then(|f| {
+                    set_multidoc(
+                        &f.to_string_lossy(),
+                        args.doc_index,
+                        &args.path,
+                        &args.value,
+                    )
+                })
+                // Echo the path as the client wrote it, not the resolved one.
+                .map(|mut out| {
+                    out.file.clone_from(&args.file);
+                    out
+                }),
             |_| false,
         )
     }
@@ -607,7 +699,8 @@ impl YamlServer {
                        its JSON data model (custom tags stripped, the projection the \
                        official YAML test suite expects). Multi-document streams return \
                        a JSON array with one element per document. Refuses hostile \
-                       input (nesting, alias expansion, size) with the same limits as \
+                       input (nesting, alias expansion, size) and duplicate keys under \
+                       the strict YAML 1.2 profile, the same rules as \
                        the library. Nothing is read from or written to disk.",
         // Content-in-request: nothing on disk is read or written. Pure,
         // read-only, idempotent, closed-world.
@@ -624,7 +717,7 @@ impl YamlServer {
         &self,
         Parameters(args): Parameters<ParseArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(parse(&args.yaml), |_| false)
+        reply(parse_with_profile(&args.yaml, self.profile()), |_| false)
     }
 
     #[tool(
@@ -675,7 +768,10 @@ impl YamlServer {
         // An invalid document is a failure the model must see, so it
         // is flagged `isError` -- but it is also a complete verdict, so
         // the structured half is kept.
-        reply(validate(&args.yaml, args.schema.as_deref()), |v| !v.valid)
+        reply(
+            validate_with_profile(&args.yaml, args.schema.as_deref(), self.profile()),
+            |v| !v.valid,
+        )
     }
 }
 
@@ -708,7 +804,9 @@ mod tests {
     }
 
     fn call(tool: &str, v: JsonValue) -> CallToolResult {
-        let server = YamlServer::new();
+        // The fixtures are written under the system temp directory, so
+        // that is the root the file tools are confined to here.
+        let server = YamlServer::with_root(std::env::temp_dir());
         match tool {
             "noyalib_get" => server.noyalib_get(args(v)),
             "noyalib_set" => server.noyalib_set(args(v)),
@@ -1092,5 +1190,106 @@ mod tests {
         };
         assert_eq!(out.to_string(), "{\n  \"a\": 1\n}");
         assert_eq!(internal("boom"), "internal: boom");
+    }
+
+    // ── root confinement ─────────────────────────────────────────────
+
+    #[test]
+    fn a_file_outside_the_root_is_refused_before_it_is_read() {
+        let inside = std::env::temp_dir().join(format!("noyalib-mcp-root-{}", std::process::id()));
+        fs::create_dir_all(&inside).unwrap();
+        let outside = write_temp("outside", "a: 1\n");
+        let server = YamlServer::with_root(inside.clone());
+        let r = server
+            .noyalib_get(args(
+                json!({"file": outside.to_str().unwrap(), "path": "a"}),
+            ))
+            .unwrap();
+        assert_eq!(r.is_error, Some(true));
+        let msg = text_of(&r);
+        assert!(msg.contains("outside the server root"), "{msg}");
+        assert!(msg.contains("--root"), "{msg}");
+        let _ = fs::remove_dir_all(inside);
+        let _ = fs::remove_file(outside);
+    }
+
+    #[test]
+    fn a_relative_path_resolves_against_the_root() {
+        let root = std::env::temp_dir().join(format!("noyalib-mcp-rel-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("c.yml"), "k: v\n").unwrap();
+        let server = YamlServer::with_root(root.clone());
+        let r = server
+            .noyalib_get(args(json!({"file": "c.yml", "path": "k"})))
+            .unwrap();
+        assert_ne!(r.is_error, Some(true), "{}", text_of(&r));
+        assert!(text_of(&r).contains('v'));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_that_escapes_the_root_is_refused() {
+        let root = std::env::temp_dir().join(format!("noyalib-mcp-sym-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let target = write_temp("symtarget", "a: 1\n");
+        std::os::unix::fs::symlink(&target, root.join("link.yml")).unwrap();
+        let server = YamlServer::with_root(root.clone());
+        let r = server
+            .noyalib_set(args(json!({"file": "link.yml", "path": "a", "value": "2"})))
+            .unwrap();
+        assert_eq!(r.is_error, Some(true));
+        assert!(
+            text_of(&r).contains("outside the server root"),
+            "{}",
+            text_of(&r)
+        );
+        assert_eq!(
+            fs::read_to_string(&target).unwrap(),
+            "a: 1\n",
+            "the target must be untouched"
+        );
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_file(target);
+    }
+
+    // ── parse profile ────────────────────────────────────────────────
+
+    #[test]
+    fn parse_rejects_a_duplicate_key_by_default() {
+        let err = parse("a: 1\na: 2\n").unwrap_err();
+        assert!(err.to_lowercase().contains("duplicate"), "{err}");
+    }
+
+    #[test]
+    fn the_standard_profile_keeps_last_wins() {
+        let out = parse_with_profile("a: 1\na: 2\n", ParseProfile::Standard).unwrap();
+        assert_eq!(out.documents, vec![json!({"a": 2})]);
+    }
+
+    #[test]
+    fn validate_reports_a_duplicate_key_as_invalid_by_default() {
+        let out = validate("a: 1\na: 2\n", None).unwrap();
+        assert!(!out.valid);
+        assert!(out.error.unwrap().to_lowercase().contains("duplicate"));
+        assert!(
+            validate_with_profile("a: 1\na: 2\n", None, ParseProfile::Standard)
+                .unwrap()
+                .valid
+        );
+    }
+
+    #[test]
+    fn profile_names_round_trip() {
+        assert_eq!(
+            ParseProfile::from_name("strict"),
+            Some(ParseProfile::Strict)
+        );
+        assert_eq!(
+            ParseProfile::from_name("standard"),
+            Some(ParseProfile::Standard)
+        );
+        assert_eq!(ParseProfile::from_name("lax"), None);
+        assert_eq!(ParseProfile::default(), ParseProfile::Strict);
     }
 }

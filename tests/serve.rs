@@ -25,7 +25,10 @@ async fn session() -> RunningService<RoleClient, ()> {
     // `serve` returns once the handshake is done, so the server must
     // already be waiting when the client starts talking.
     drop(tokio::spawn(async move {
-        if let Ok(server) = noyalib_mcp::YamlServer::new().serve(server_io).await {
+        if let Ok(server) = noyalib_mcp::YamlServer::with_root(std::env::temp_dir())
+            .serve(server_io)
+            .await
+        {
             let _ = server.waiting().await;
         }
     }));

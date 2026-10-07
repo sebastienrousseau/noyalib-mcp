@@ -31,6 +31,9 @@
 //! tools are.
 
 use std::io;
+use std::path::{Path, PathBuf};
+
+use noyalib_mcp::ParseProfile;
 use std::process::ExitCode;
 
 use axum::Router;
@@ -83,6 +86,11 @@ pub struct Options {
     /// The port the HTTP transports bind. Zero asks the system for a
     /// free one, which is what a test wants.
     pub port: u16,
+    /// The directory the file tools are confined to; `None` means the
+    /// working directory.
+    pub root: Option<PathBuf>,
+    /// The rules the parse tools apply.
+    pub profile: ParseProfile,
 }
 
 impl Default for Options {
@@ -91,6 +99,8 @@ impl Default for Options {
             transport: Transport::Stdio,
             host: DEFAULT_HOST.to_owned(),
             port: DEFAULT_PORT,
+            root: None,
+            profile: ParseProfile::default(),
         }
     }
 }
@@ -111,7 +121,7 @@ pub enum Command {
 pub fn usage(name: &str) -> String {
     format!(
         "Usage: {name} [--transport <stdio|streamable-http|sse>] \
-         [--host <address>] [--port <number>]\n\
+         [--host <address>] [--port <number>] [--root <dir>] [--profile <strict|standard>]\n\
          \n\
          Options:\n\
          \x20 --transport <name>  stdio (default), streamable-http, or sse\n\
@@ -119,6 +129,10 @@ pub fn usage(name: &str) -> String {
          (default {DEFAULT_HOST})\n\
          \x20 --port <number>     port for the HTTP transports \
          (default {DEFAULT_PORT})\n\
+         \x20 --root <dir>        directory the file tools may read and write \
+         (default: the working directory)\n\
+         \x20 --profile <name>    rules for noyalib_parse and noyalib_validate: \
+         strict (default) or standard\n\
          \x20 --version           print the version and exit\n\
          \x20 --help              print this text and exit\n\
          \n\
@@ -175,7 +189,10 @@ fn apply_flag(
     inline: Option<String>,
     rest: &mut dyn Iterator<Item = String>,
 ) -> Result<(), String> {
-    if !matches!(flag, "--transport" | "--host" | "--port") {
+    if !matches!(
+        flag,
+        "--transport" | "--host" | "--port" | "--root" | "--profile"
+    ) {
         return Err(format!("unknown argument `{flag}`"));
     }
     let value = inline
@@ -184,6 +201,11 @@ fn apply_flag(
     match flag {
         "--transport" => options.transport = parse_transport(&value)?,
         "--port" => options.port = parse_port(&value)?,
+        "--root" => options.root = Some(PathBuf::from(value)),
+        "--profile" => {
+            options.profile = ParseProfile::from_name(&value)
+                .ok_or_else(|| format!("unknown profile `{value}`; choose strict or standard"))?;
+        }
         _ => options.host = value,
     }
     Ok(())
@@ -199,6 +221,26 @@ fn parse_port(text: &str) -> Result<u16, String> {
         .map_err(|_| format!("`{text}` is not a port number"))
 }
 
+/// The directory the file tools are confined to: `--root` when given,
+/// else the working directory, canonicalised so comparisons see what
+/// the kernel sees.
+fn resolve_root(root: Option<&Path>) -> Result<PathBuf, String> {
+    let chosen = match root {
+        Some(r) => r.to_path_buf(),
+        // An unreadable working directory falls back to `.`, which the
+        // canonicalisation below then reports with its own error.
+        None => std::env::current_dir().unwrap_or(PathBuf::from(".")),
+    };
+    let canonical = chosen
+        .canonicalize()
+        .map_err(|e| format!("--root {}: {e}", chosen.display()))?;
+    if canonical.is_dir() {
+        Ok(canonical)
+    } else {
+        Err(format!("--root {}: not a directory", chosen.display()))
+    }
+}
+
 /// Serve `factory`'s handler as `name` according to the command line.
 ///
 /// This is the whole of `main`: parse, serve, and turn the outcome
@@ -207,7 +249,7 @@ fn parse_port(text: &str) -> Result<u16, String> {
 pub fn run<H, F, I>(name: &str, version: &str, args: I, factory: F) -> ExitCode
 where
     H: ServerHandler,
-    F: Fn() -> H + Send + Sync + 'static,
+    F: Fn(PathBuf, ParseProfile) -> H + Send + Sync + 'static,
     I: IntoIterator,
     I::Item: Into<String>,
 {
@@ -226,6 +268,17 @@ where
             return ExitCode::from(2);
         }
     };
+    // The root is checked once, here, so a typo is a usage error with a
+    // message instead of a server that refuses every file.
+    let root = match resolve_root(options.root.as_deref()) {
+        Ok(root) => root,
+        Err(message) => {
+            eprintln!("{name}: {message}\n\n{}", usage(name));
+            return ExitCode::from(2);
+        }
+    };
+    let profile = options.profile;
+    let make = move || factory(root.clone(), profile);
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(e) => {
@@ -233,7 +286,7 @@ where
             return ExitCode::FAILURE;
         }
     };
-    match runtime.block_on(serve(&options, factory)) {
+    match runtime.block_on(serve(&options, make)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("{name}: {e}");
@@ -376,6 +429,8 @@ mod tests {
             transport: Transport::StreamableHttp,
             host: "0.0.0.0".to_owned(),
             port: 9000,
+            root: None,
+            profile: ParseProfile::Strict,
         };
         assert_eq!(
             parse([
@@ -404,6 +459,38 @@ mod tests {
                 ..Options::default()
             }))
         );
+    }
+
+    #[test]
+    fn root_is_a_path_option() {
+        assert_eq!(
+            parse(["--root", "/srv/yaml"]),
+            Ok(Command::Serve(Options {
+                root: Some(PathBuf::from("/srv/yaml")),
+                ..Options::default()
+            }))
+        );
+        assert!(parse(["--root"]).is_err_and(|e| e.contains("needs a value")));
+    }
+
+    #[test]
+    fn profile_defaults_to_strict_and_takes_standard() {
+        assert_eq!(Options::default().profile, ParseProfile::Strict);
+        assert_eq!(
+            parse(["--profile", "standard"]),
+            Ok(Command::Serve(Options {
+                profile: ParseProfile::Standard,
+                ..Options::default()
+            }))
+        );
+        assert!(parse(["--profile", "lax"]).is_err_and(|e| e.contains("lax")));
+    }
+
+    #[test]
+    fn a_missing_root_is_a_usage_error() {
+        let err = resolve_root(Some(Path::new("/definitely/not/here"))).unwrap_err();
+        assert!(err.contains("--root"), "{err}");
+        assert!(resolve_root(None).is_ok());
     }
 
     #[test]

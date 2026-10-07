@@ -27,7 +27,11 @@ fn bin() -> &'static str {
 
 /// Send `lines` to the server and collect the replies, parsed.
 fn converse(lines: &[&str]) -> Vec<Value> {
+    // The fixtures live under the system temp directory, so the file
+    // tools are rooted there; this also exercises the flag end to end.
     let mut child = Command::new(bin())
+        .arg("--root")
+        .arg(std::env::temp_dir())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

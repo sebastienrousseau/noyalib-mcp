@@ -64,7 +64,7 @@
 
 ```toml
 [dependencies]
-noyalib-mcp = "0.0.53"
+noyalib-mcp = "0.0.54"
 ```
 
 Install or run the server through the channel that fits the host:
@@ -79,7 +79,7 @@ docker run --rm -i ghcr.io/sebastienrousseau/noyalib-mcp:latest
 
 - Rust **1.88.0 or newer** when building from source.
 - Linux, macOS, and Windows are tested by CI.
-- The crate pins `noyalib` at exactly `=0.0.53` under the lockstep contract.
+- The crate pins `noyalib` at exactly `=0.0.54` under the lockstep contract.
 - An MCP client is required to drive the server.
 
 | Surface | Minimum toolchain | Enforcement |
@@ -182,9 +182,13 @@ See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md) for methodology.
 | `--transport sse` | Serve `/sse` and `/messages/` |
 | `--host ADDRESS` | Bind an HTTP transport to an address |
 | `--port PORT` | Select the HTTP listening port |
+| `--root DIR` | Confine the file tools to DIR (default: the working directory) |
+| `--profile strict\|standard` | Rules for `noyalib_parse` and `noyalib_validate`: noyalib's strict YAML 1.2 profile (the default: duplicate keys and odd indentation are errors, tighter limits) or the library defaults |
 
 Bind remote transports deliberately. The default loopback host avoids exposing
-the server beyond the local machine.
+the server beyond the local machine. The file tools (`noyalib_get`, `noyalib_set`,
+`noyalib_set_multidoc`) refuse any path that resolves outside the root, symlinks
+included; start the server with `--root` on the directory a client may touch.
 
 ## Examples
 

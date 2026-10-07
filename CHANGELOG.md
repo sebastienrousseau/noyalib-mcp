@@ -11,6 +11,35 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
+## [v0.0.54] - 2026-10-07
+
+### Added
+
+- `--root DIR` confines the file tools to one directory.
+- `--profile strict|standard` chooses the rules `noyalib_parse` and
+  `noyalib_validate` apply.
+
+### Changed
+
+- Tracks `noyalib` 0.0.54 under the exact lockstep pin.
+- The file tools (`noyalib_get`, `noyalib_set`, `noyalib_set_multidoc`)
+  resolve every `file` argument against the server root, the working
+  directory unless `--root` says otherwise, and refuse a path that lands
+  outside it after symlinks are followed. A client that could reach the
+  server could previously read or rewrite any YAML file the process
+  could open.
+- `noyalib_parse` and `noyalib_validate` parse under noyalib's strict
+  YAML 1.2 profile by default, the one built for untrusted input:
+  duplicate keys are an error instead of last-wins, only `true` and
+  `false` are booleans, indentation must be even, and the tighter
+  resource limits apply. Text the standard profile accepted may now be
+  refused; start the server with `--profile standard` for the previous
+  behaviour.
+- The release gate refuses a tag while `deny.toml` allows any git source,
+  next to its refusal of the pre-release `[patch]`, so cargo-deny can
+  allow the core's branch during the iteration without that allowance
+  reaching a release.
+
 ## [v0.0.53] - 2026-10-06
 
 ### Changed
