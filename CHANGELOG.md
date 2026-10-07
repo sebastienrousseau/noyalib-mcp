@@ -70,6 +70,12 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   (backticks, backslashes, control characters) and cuts it at 256
   characters, so it stays one quoted name instead of adding lines to
   the text the model reads as the user's.
+- `SECURITY.md` described a stdio-only server that "never opens
+  listening sockets" and caps message length before deserialising,
+  neither of which was true. It now states the trust model as the code
+  implements it: stdio by default, HTTP opt-in on loopback with its
+  `Host`/`Origin` checks and no authentication, root confinement and
+  its limits (hard links, JSON files), and every size and time cap.
 
 ### Changed (behaviour)
 

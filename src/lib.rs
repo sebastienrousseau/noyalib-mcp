@@ -67,12 +67,14 @@
 //!
 //! `#![forbid(unsafe_code)]`. No FFI. The file tools are confined to a
 //! root directory (the working directory unless `--root` says
-//! otherwise) and refuse any path that resolves outside it. They read and write
-//! whatever the process may; confine a deployment with container
-//! mounts or systemd `ReadWritePaths=`. The HTTP listeners exist only
-//! when asked for on the command line, bind loopback by default and do
-//! not authenticate. Resource-limit gates are inherited from
-//! `noyalib`'s `ParserConfig` defaults. Full posture:
+//! otherwise) and refuse any path that resolves outside it; on unix the
+//! check and the open are one walk from a handle on the root. Inside
+//! the root they read and write whatever the process may; confine a
+//! deployment with container mounts or systemd `ReadWritePaths=`. The
+//! HTTP listeners exist only when asked for on the command line, bind
+//! loopback by default, refuse a foreign `Host` or `Origin`, and do not
+//! authenticate. Every tool parses under the `--profile` limits, and
+//! requests are capped in size, nesting and time. Full posture:
 //! [`SECURITY.md`](https://github.com/sebastienrousseau/noyalib-mcp/blob/main/SECURITY.md).
 //!
 //! # API stability and SemVer
