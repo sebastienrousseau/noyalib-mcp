@@ -222,8 +222,10 @@ fn parse_port(text: &str) -> Result<u16, String> {
 }
 
 /// The directory the file tools are confined to: `--root` when given,
-/// else the working directory, canonicalised so comparisons see what
-/// the kernel sees.
+/// else the working directory. It must exist and be a directory. The
+/// path is returned as given (made absolute), so an absolute `file`
+/// argument spelt the way the operator spelt the root still matches;
+/// the server also matches the canonical form.
 fn resolve_root(root: Option<&Path>) -> Result<PathBuf, String> {
     let chosen = match root {
         Some(r) => r.to_path_buf(),
@@ -235,7 +237,7 @@ fn resolve_root(root: Option<&Path>) -> Result<PathBuf, String> {
         .canonicalize()
         .map_err(|e| format!("--root {}: {e}", chosen.display()))?;
     if canonical.is_dir() {
-        Ok(canonical)
+        Ok(std::path::absolute(&chosen).unwrap_or(canonical))
     } else {
         Err(format!("--root {}: not a directory", chosen.display()))
     }

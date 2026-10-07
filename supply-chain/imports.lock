@@ -121,12 +121,26 @@ when = "2026-01-24"
 user-id = 55123
 user-login = "rust-lang-owner"
 
+[[publisher.linux-raw-sys]]
+version = "0.12.1"
+when = "2025-12-23"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.referencing]]
 version = "0.58.5"
 when = "2026-10-02"
 user-id = 82692
 user-login = "Stranger6667"
 user-name = "Dmitry Dygalo"
+
+[[publisher.rustix]]
+version = "1.1.5"
+when = "2026-09-16"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
 
 [[publisher.unicode-xid]]
 version = "0.2.6"

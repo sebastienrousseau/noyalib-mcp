@@ -100,6 +100,7 @@ use rmcp::service::RequestContext;
 use rmcp::{RoleServer, ServerHandler, prompt_handler, tool_handler};
 use std::path::{Path, PathBuf};
 
+mod fsio;
 pub mod prompts;
 pub mod resources;
 pub mod tools;
@@ -135,11 +136,11 @@ const INSTRUCTIONS: &str = "Read and edit YAML files losslessly. \
 pub struct YamlServer {
     tool_router: ToolRouter<Self>,
     prompt_router: PromptRouter<Self>,
-    /// The directory the file tools may read and write under. Every
-    /// `file` argument is resolved against it and must stay inside it
-    /// after symlinks are followed; anything else is refused before
-    /// the file is opened.
-    root: PathBuf,
+    /// The directory the file tools may read and write under, held
+    /// open. Every `file` argument is walked from it one component at
+    /// a time; a path or symlink that leads outside is refused, and
+    /// nothing outside is looked at.
+    root: fsio::RootDir,
     /// The rules the parse tools apply; see [`ParseProfile`].
     profile: ParseProfile,
 }
@@ -165,11 +166,10 @@ impl YamlServer {
     /// `..` segment compares the way the kernel resolves it.
     #[must_use]
     pub fn with_root(root: PathBuf) -> Self {
-        let root = root.canonicalize().unwrap_or(root);
         Self {
             tool_router: Self::tool_router(),
             prompt_router: Self::prompt_router(),
-            root,
+            root: fsio::RootDir::open(root),
             profile: ParseProfile::default(),
         }
     }
@@ -191,36 +191,49 @@ impl YamlServer {
     /// The directory the file tools are confined to.
     #[must_use]
     pub fn root(&self) -> &Path {
-        &self.root
+        self.root.path()
     }
 
     /// Resolve a `file` argument against the root and refuse it when
-    /// it points outside, symlinks included. The file must exist: the
-    /// file tools all read it before anything else.
+    /// it points outside, symlinks included.
+    ///
+    /// The file tools do not use this: they open the file in the same
+    /// walk that checks it (see `src/fsio.rs`), so nothing can be
+    /// swapped between the check and the open. A caller that reopens
+    /// the returned path by name has that race.
     ///
     /// # Errors
     ///
-    /// The path does not exist, cannot be canonicalised, or lies
-    /// outside the root. The message names the root so a client knows
-    /// what to pass to `--root`.
+    /// The path does not exist or cannot be canonicalised (inside the
+    /// root), or lies outside the root. A path outside the root draws
+    /// one message whatever is there, and the message does not name
+    /// the root.
     pub fn confine(&self, file: &str) -> Result<PathBuf, String> {
-        let candidate = if Path::new(file).is_absolute() {
-            PathBuf::from(file)
-        } else {
-            self.root.join(file)
-        };
+        let at = self.locate(file)?;
+        drop(at);
+        let candidate = self.root().join(file);
         let resolved = candidate
             .canonicalize()
             .map_err(|e| format!("read {file}: {e}"))?;
-        if resolved.starts_with(&self.root) {
+        if resolved.starts_with(self.root()) {
             Ok(resolved)
         } else {
-            Err(format!(
-                "{file} is outside the server root {}; start noyalib-mcp with --root to allow it",
-                self.root.display()
-            ))
+            Err(outside(file))
         }
     }
+
+    /// Find a `file` argument under the root, for the file tools.
+    fn locate(&self, file: &str) -> Result<fsio::Located, String> {
+        self.root.locate(Path::new(file)).map_err(|e| match e {
+            fsio::FileError::Outside => outside(file),
+            fsio::FileError::Io(e) => format!("read {file}: {e}"),
+        })
+    }
+}
+
+/// The one answer for a path outside the root.
+fn outside(file: &str) -> String {
+    format!("{file} is outside the server root; start noyalib-mcp with --root to allow it")
 }
 
 #[tool_handler(router = self.tool_router)]

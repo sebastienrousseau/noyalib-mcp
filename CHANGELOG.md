@@ -24,6 +24,22 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   message that is not `application/json` (415). A web page that rebound
   its name to 127.0.0.1 could open the stream and call every tool.
   Streamable HTTP also refuses a non-local `Origin` now.
+- `noyalib_set` and `noyalib_set_multidoc` keep the file's permission
+  bits (and owner, where the process may set it). A 0600 file was left
+  0644 and an executable lost its execute bits.
+- The replacement file is created exclusively under a random name, so a
+  file or symlink planted at the temp name is never opened. The old
+  name was predictable and a planted symlink redirected the write.
+- The file tools walk every path from an open handle on the root, one
+  component at a time without following symlinks implicitly, and read
+  and write relative to the directory the walk ends in. A directory
+  swapped for a symlink between the root check and the open could
+  redirect a read or a write outside the root. A symlink inside the
+  root still works; one that leaves it is refused.
+- A path outside the root draws one message, whether it exists, is
+  missing or is unreadable, and no message names the absolute root.
+- Paths are no longer converted to strings and back, so a non-UTF-8
+  name cannot be reopened as a different, lossy look-alike.
 
 ## [v0.0.54] - 2026-10-07
 

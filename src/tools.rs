@@ -13,7 +13,9 @@
 //! file -- comments, indentation, sibling entries -- survive.
 
 use std::fmt;
+#[cfg(test)]
 use std::fs;
+use std::path::Path;
 
 use noyalib::cst::{parse_document, parse_stream};
 use rmcp::handler::server::tool::schema_for_output;
@@ -25,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use crate::YamlServer;
+use crate::fsio::Located;
 
 // --- Outputs -------------------------------------------------------------
 
@@ -215,7 +218,17 @@ impl ParseProfile {
 /// The file cannot be read, does not parse, or has no such path. The
 /// message says which.
 pub fn get(file: &str, path: &str) -> Result<GetOutput, String> {
-    let src = fs::read_to_string(file).map_err(|e| format!("read {file}: {e}"))?;
+    get_at(&locate_unconfined(file)?, file, path)
+}
+
+/// Locate a file the library functions were given, with no root.
+fn locate_unconfined(file: &str) -> Result<Located, String> {
+    Located::unconfined(Path::new(file)).map_err(|e| format!("read {file}: {e}"))
+}
+
+/// [`get`] on a file already located; `file` is how to name it.
+pub(crate) fn get_at(at: &Located, file: &str, path: &str) -> Result<GetOutput, String> {
+    let (src, _) = at.read().map_err(|e| format!("read {file}: {e}"))?;
     let doc = parse_document(&src).map_err(|e| format!("parse {file}: {e}"))?;
     match doc.get(path) {
         Some(value) => Ok(GetOutput {
@@ -241,11 +254,22 @@ pub fn get(file: &str, path: &str) -> Result<GetOutput, String> {
 /// cannot be applied at the path. The file is unchanged on any of
 /// them.
 pub fn set(file: &str, path: &str, value: &str) -> Result<SetOutput, String> {
-    let src = fs::read_to_string(file).map_err(|e| format!("read {file}: {e}"))?;
+    set_at(&locate_unconfined(file)?, file, path, value)
+}
+
+/// [`set`] on a file already located; `file` is how to name it.
+pub(crate) fn set_at(
+    at: &Located,
+    file: &str,
+    path: &str,
+    value: &str,
+) -> Result<SetOutput, String> {
+    let (src, kept) = at.read().map_err(|e| format!("read {file}: {e}"))?;
     let mut doc = parse_document(&src).map_err(|e| format!("parse {file}: {e}"))?;
     doc.set(path, value)
         .map_err(|e| format!("set {path} = {value}: {e}"))?;
-    write_atomic(file, doc.to_string().as_bytes()).map_err(|e| format!("write {file}: {e}"))?;
+    at.replace(doc.to_string().as_bytes(), kept)
+        .map_err(|e| format!("write {file}: {e}"))?;
     Ok(SetOutput {
         file: file.to_owned(),
         path: path.to_owned(),
@@ -265,7 +289,19 @@ pub fn set_multidoc(
     path: &str,
     value: &str,
 ) -> Result<SetMultidocOutput, String> {
-    let src = fs::read_to_string(file).map_err(|e| format!("read {file}: {e}"))?;
+    set_multidoc_at(&locate_unconfined(file)?, file, doc_index, path, value)
+}
+
+/// [`set_multidoc`] on a file already located; `file` is how to name
+/// it.
+pub(crate) fn set_multidoc_at(
+    at: &Located,
+    file: &str,
+    doc_index: usize,
+    path: &str,
+    value: &str,
+) -> Result<SetMultidocOutput, String> {
+    let (src, kept) = at.read().map_err(|e| format!("read {file}: {e}"))?;
     // parse_stream keeps each `---`-delimited document as its own
     // lossless Document, retaining its separator; concatenating their
     // rendered forms reproduces the stream byte-for-byte, so editing one
@@ -281,7 +317,8 @@ pub fn set_multidoc(
         .set(path, value)
         .map_err(|e| format!("set {path} = {value}: {e}"))?;
     let out: String = docs.iter().map(ToString::to_string).collect();
-    write_atomic(file, out.as_bytes()).map_err(|e| format!("write {file}: {e}"))?;
+    at.replace(out.as_bytes(), kept)
+        .map_err(|e| format!("write {file}: {e}"))?;
     Ok(SetMultidocOutput {
         file: file.to_owned(),
         doc_index,
@@ -409,38 +446,6 @@ pub fn validate_with_profile(
 /// not each count as an uncovered closure.
 fn internal(e: impl fmt::Display) -> String {
     format!("internal: {e}")
-}
-
-/// Write `bytes` to `file` atomically: write to a sibling temp
-/// file, fsync it, then `rename` over the target. The rename is
-/// atomic on POSIX and `MoveFileExW(MOVEFILE_REPLACE_EXISTING |
-/// MOVEFILE_WRITE_THROUGH)` semantics on Windows, so concurrent
-/// readers always see either the old or the new contents -- never
-/// a half-written truncation. The fsync also closes a Windows
-/// race where `fs::write` returned before the kernel page cache
-/// flushed, leaving a freshly-spawned reader to observe the old
-/// bytes.
-fn write_atomic(file: &str, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    use std::path::Path;
-    let target = Path::new(file);
-    let parent = target.parent().unwrap_or(Path::new("."));
-    let stem = target
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("noyalib-set");
-    let pid = std::process::id();
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let tmp = parent.join(format!(".{stem}.{pid}.{nanos}.tmp"));
-    {
-        let mut f = fs::File::create(&tmp)?;
-        f.write_all(bytes)?;
-        f.sync_all()?;
-    }
-    fs::rename(&tmp, target)
 }
 
 // --- Arguments -----------------------------------------------------------
@@ -603,8 +608,8 @@ impl YamlServer {
         Parameters(args): Parameters<GetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         reply(
-            self.confine(&args.file)
-                .and_then(|f| get(&f.to_string_lossy(), &args.path)),
+            self.locate(&args.file)
+                .and_then(|at| get_at(&at, &args.file, &args.path)),
             |_| false,
         )
     }
@@ -638,13 +643,8 @@ impl YamlServer {
         Parameters(args): Parameters<SetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         reply(
-            self.confine(&args.file)
-                .and_then(|f| set(&f.to_string_lossy(), &args.path, &args.value))
-                // Echo the path as the client wrote it, not the resolved one.
-                .map(|mut out| {
-                    out.file.clone_from(&args.file);
-                    out
-                }),
+            self.locate(&args.file)
+                .and_then(|at| set_at(&at, &args.file, &args.path, &args.value)),
             |_| false,
         )
     }
@@ -674,20 +674,9 @@ impl YamlServer {
         Parameters(args): Parameters<SetMultidocArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         reply(
-            self.confine(&args.file)
-                .and_then(|f| {
-                    set_multidoc(
-                        &f.to_string_lossy(),
-                        args.doc_index,
-                        &args.path,
-                        &args.value,
-                    )
-                })
-                // Echo the path as the client wrote it, not the resolved one.
-                .map(|mut out| {
-                    out.file.clone_from(&args.file);
-                    out
-                }),
+            self.locate(&args.file).and_then(|at| {
+                set_multidoc_at(&at, &args.file, args.doc_index, &args.path, &args.value)
+            }),
             |_| false,
         )
     }
@@ -814,6 +803,15 @@ mod tests {
             "noyalib_parse" => server.noyalib_parse(args(v)),
             "noyalib_edit" => server.noyalib_edit(args(v)),
             "noyalib_validate" => server.noyalib_validate(args(v)),
+            other => panic!("no such tool {other}"),
+        }
+        .expect("a tool failure is a result, not a protocol error")
+    }
+
+    fn call_on(server: &YamlServer, tool: &str, v: JsonValue) -> CallToolResult {
+        match tool {
+            "noyalib_get" => server.noyalib_get(args(v)),
+            "noyalib_set" => server.noyalib_set(args(v)),
             other => panic!("no such tool {other}"),
         }
         .expect("a tool failure is a result, not a protocol error")
@@ -1251,6 +1249,131 @@ mod tests {
         );
         let _ = fs::remove_dir_all(root);
         let _ = fs::remove_file(target);
+    }
+
+    // ── file safety ──────────────────────────────────────────────────
+
+    /// A fresh directory under the system temp dir.
+    fn scratch_dir(label: &str) -> PathBuf {
+        let p = temp_path(label).with_extension("d");
+        let _ = fs::remove_dir_all(&p);
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn set_keeps_the_file_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = scratch_dir("mode");
+        let server = YamlServer::with_root(root.clone());
+        for mode in [0o600, 0o755, 0o640] {
+            let name = format!("m{mode:o}.yml");
+            let p = root.join(&name);
+            fs::write(&p, "a: 1\n").unwrap();
+            fs::set_permissions(&p, fs::Permissions::from_mode(mode)).unwrap();
+            let r = call_on(
+                &server,
+                "noyalib_set",
+                json!({"file": name, "path": "a", "value": "2"}),
+            );
+            assert!(!is_error(&r), "{}", text_of(&r));
+            assert_eq!(fs::read_to_string(&p).unwrap(), "a: 2\n");
+            let got = fs::metadata(&p).unwrap().permissions().mode() & 0o7777;
+            assert_eq!(got, mode, "mode of {name}: {got:o}");
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn outside_the_root_is_one_answer_whatever_is_there() {
+        // Whether a path outside the root exists, is missing or is
+        // unreadable must not show, and neither may the root itself.
+        let root = scratch_dir("oracle");
+        let outside = write_temp("oracle-outside", "a: 1\n");
+        let server = YamlServer::with_root(root.clone());
+        let missing = outside.with_extension("missing");
+        let mut answers = Vec::new();
+        for file in [
+            outside.to_str().unwrap().to_owned(),
+            missing.to_str().unwrap().to_owned(),
+            format!("../{}", outside.file_name().unwrap().to_str().unwrap()),
+            format!("../{}", missing.file_name().unwrap().to_str().unwrap()),
+            "/etc/does-not-exist".to_owned(),
+        ] {
+            let r = call_on(&server, "noyalib_get", json!({"file": file, "path": "a"}));
+            assert!(is_error(&r));
+            let text = text_of(&r).replace(&file, "<file>");
+            assert!(!text.contains(root.to_str().unwrap()), "{text}");
+            assert!(!text.contains(server.root().to_str().unwrap()), "{text}");
+            answers.push(text);
+        }
+        assert!(answers.windows(2).all(|w| w[0] == w[1]), "{answers:#?}");
+        assert!(
+            answers[0].contains("outside the server root"),
+            "{}",
+            answers[0]
+        );
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_file(outside);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_racing_symlink_swap_never_escapes_the_root() {
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicBool;
+        let root = scratch_dir("race-root");
+        let outside = scratch_dir("race-outside");
+        fs::create_dir_all(root.join("sub")).unwrap();
+        fs::write(root.join("sub/secret.yml"), "secret: inside\n").unwrap();
+        fs::write(outside.join("secret.yml"), "secret: OUTSIDE\n").unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let swapper = {
+            let (root, outside, stop) = (root.clone(), outside.clone(), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                let (sub, real) = (root.join("sub"), root.join("sub.real"));
+                while !stop.load(Ordering::Relaxed) {
+                    let _ = fs::rename(&sub, &real);
+                    let _ = std::os::unix::fs::symlink(&outside, &sub);
+                    let _ = fs::remove_file(&sub);
+                    let _ = fs::rename(&real, &sub);
+                }
+            })
+        };
+        let server = YamlServer::with_root(root.clone());
+        let file = json!("sub/secret.yml");
+        for i in 0..6000 {
+            let r = call_on(
+                &server,
+                "noyalib_get",
+                json!({"file": file, "path": "secret"}),
+            );
+            assert_ne!(text_of(&r), "OUTSIDE", "read escaped the root on call {i}");
+            if i % 4 == 0 {
+                let v = format!("w{i}");
+                let _ = call_on(
+                    &server,
+                    "noyalib_set",
+                    json!({"file": file, "path": "secret", "value": v}),
+                );
+            }
+        }
+        stop.store(true, Ordering::Relaxed);
+        swapper.join().unwrap();
+        assert_eq!(
+            fs::read_to_string(outside.join("secret.yml")).unwrap(),
+            "secret: OUTSIDE\n",
+            "a write escaped the root"
+        );
+        let stray: Vec<_> = fs::read_dir(&outside)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name())
+            .collect();
+        assert_eq!(stray.len(), 1, "temp files landed outside: {stray:?}");
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(outside);
     }
 
     // ── parse profile ────────────────────────────────────────────────
