@@ -163,3 +163,85 @@ fn a_non_utf8_name_is_opened_as_itself() {
     assert_eq!(read(&root, "link.yml").unwrap(), "a: raw\n");
     let _ = fs::remove_dir_all(dir);
 }
+
+#[test]
+fn a_root_that_cannot_be_opened_refuses_every_lookup() {
+    let dir = scratch("gone");
+    let missing = dir.join("not-here");
+    let root = RootDir::open(missing.clone());
+    assert_eq!(root.path(), missing);
+    let shown = format!("{root:?}");
+    assert!(
+        shown.starts_with("RootDir") && shown.contains("not-here"),
+        "{shown}"
+    );
+    let message = match root.locate(Path::new("x.yml")) {
+        Err(FileError::Io(e)) => e.to_string(),
+        _ => panic!("a lookup under a missing root must fail"),
+    };
+    #[cfg(unix)]
+    assert!(message.contains("cannot be opened"), "{message}");
+    assert!(!message.is_empty());
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn only_a_regular_file_within_the_limit_is_read() {
+    let dir = scratch("limit");
+    fs::write(dir.join("t.yml"), "a: 12345\n").unwrap();
+    let root = RootDir::open(dir.clone());
+    let at = root.locate(Path::new("t.yml")).unwrap();
+    let err = at.read(4).unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    assert!(
+        err.to_string().contains("9 bytes, over the 4-byte"),
+        "{err}"
+    );
+    assert_eq!(at.read(9).unwrap().0, "a: 12345\n");
+    // A directory opens for reading and is then refused.
+    let err = Located::unconfined(&dir)
+        .unwrap()
+        .read(1 << 20)
+        .unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+    assert!(err.to_string().contains("not a regular file"), "{err}");
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_path_that_names_no_file_is_refused() {
+    let err = Located::unconfined(Path::new("/")).err().unwrap();
+    assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+    let dir = scratch("nofile");
+    fs::create_dir_all(dir.join("a")).unwrap();
+    let root = RootDir::open(dir.clone());
+    for walk_ends_on_a_dir in [".", "a/..", "a/."] {
+        assert!(
+            matches!(read(&root, walk_ends_on_a_dir), Err(FileError::Io(_))),
+            "{walk_ends_on_a_dir}"
+        );
+    }
+    assert!(matches!(
+        unix::components(Path::new("/a")),
+        Err(FileError::Outside)
+    ));
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_failed_rename_removes_the_temp_and_keeps_the_target() {
+    // The target is a non-empty directory: the temp is created and
+    // written, the rename over the directory fails, and the temp is
+    // removed rather than left beside it.
+    let dir = scratch("rename");
+    fs::create_dir_all(dir.join("d/inner")).unwrap();
+    let at = Located::unconfined(&dir.join("d")).unwrap();
+    let keep = kept(&fs::metadata(dir.join("d")).unwrap());
+    let mut names = || OsString::from(".d.tmp");
+    assert!(at.replace_named(b"x: 1\n", keep, &mut names).is_err());
+    assert!(!dir.join(".d.tmp").exists(), "the temp was removed");
+    assert!(dir.join("d/inner").is_dir());
+    let _ = fs::remove_dir_all(dir);
+}

@@ -298,3 +298,38 @@ fn the_cst_tools_follow_the_profile() {
     }
     let _ = fs::remove_dir_all(root);
 }
+
+#[test]
+fn a_directory_is_not_read_as_a_file() {
+    let dir = scratch_dir("isdir");
+    let err = get(dir.to_str().unwrap(), "a").unwrap_err();
+    assert!(err.starts_with("read "), "{err}");
+    assert!(err.contains("not a regular file"), "{err}");
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_write_the_directory_refuses_leaves_the_file_alone() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scratch_dir("rodir");
+    let one = dir.join("one.yml");
+    let stream = dir.join("stream.yml");
+    fs::write(&one, "a: 1\n").unwrap();
+    fs::write(&stream, "a: 1\n---\nb: 2\n").unwrap();
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
+    // A privileged user writes regardless of the mode; nothing to see.
+    let privileged = fs::write(dir.join("probe"), "").is_ok();
+    let set_err = set(one.to_str().unwrap(), "a", "9");
+    let multidoc_err = set_multidoc(stream.to_str().unwrap(), 1, "b", "9");
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+    if !privileged {
+        let err = set_err.unwrap_err();
+        assert!(err.starts_with("write "), "{err}");
+        let err = multidoc_err.unwrap_err();
+        assert!(err.starts_with("write "), "{err}");
+        assert_eq!(fs::read_to_string(&one).unwrap(), "a: 1\n");
+        assert_eq!(fs::read_to_string(&stream).unwrap(), "a: 1\n---\nb: 2\n");
+    }
+    let _ = fs::remove_dir_all(dir);
+}

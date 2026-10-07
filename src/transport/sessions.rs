@@ -137,3 +137,44 @@ impl SessionManager for CappedSessions {
         self.inner.event_store()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn the_cap_refuses_one_session_too_many_until_one_closes() {
+        let sessions = CappedSessions::new(1);
+        let (id, _transport) = sessions.create_session().await.unwrap();
+        assert!(sessions.has_session(&id).await.unwrap());
+        let err = sessions.create_session().await.err().unwrap();
+        assert!(matches!(err, CappedError::Full(1)), "{err}");
+        assert!(err.to_string().contains("session limit of 1"), "{err}");
+        sessions.close_session(&id).await.unwrap();
+        assert!(!sessions.has_session(&id).await.unwrap());
+        assert!(sessions.create_session().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn an_unknown_session_is_the_inner_managers_error() {
+        let sessions = CappedSessions::new(4);
+        let id: SessionId = "no-such-session".into();
+        let err = sessions.resume(&id, "0".to_owned()).await.err().unwrap();
+        assert!(matches!(err, CappedError::Inner(_)), "{err}");
+        assert!(err.to_string().contains("no-such-session"), "{err}");
+        assert!(sessions.event_store().is_none());
+    }
+
+    #[tokio::test]
+    async fn restore_is_passed_through() {
+        // Only an HTTP service with a session store calls this, and
+        // this server configures none; the wrapper only forwards it.
+        let sessions = CappedSessions::new(4);
+        let id: SessionId = "restored".into();
+        let first = sessions.restore_session(id.clone()).await.unwrap();
+        assert!(matches!(first, RestoreOutcome::Restored(_)));
+        let again = sessions.restore_session(id.clone()).await.unwrap();
+        assert!(matches!(again, RestoreOutcome::AlreadyPresent));
+        assert!(sessions.has_session(&id).await.unwrap());
+    }
+}

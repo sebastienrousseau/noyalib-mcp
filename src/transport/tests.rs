@@ -105,6 +105,8 @@ fn a_broad_working_directory_is_not_a_default_root() {
     assert!(refuse_broad_default(&tmp, Some(&tmp)).is_err());
     assert!(refuse_broad_default(&tmp, None).is_ok());
     assert!(refuse_broad_default(&tmp, Some(Path::new("/nonexistent"))).is_ok());
+    // A root that cannot be canonicalised is judged as given.
+    assert!(refuse_broad_default(Path::new("/definitely/not/here"), None).is_ok());
 }
 
 #[test]
