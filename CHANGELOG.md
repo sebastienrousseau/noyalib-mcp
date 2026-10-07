@@ -45,6 +45,22 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   reading, and do their file I/O on the blocking pool. A FIFO read per
   worker thread wedged the whole server, `ping` included, and a 4 GiB
   file was read into memory before any limit applied.
+- `noyalib_set`, `noyalib_set_multidoc` and `noyalib_edit` refuse a
+  replacement value over 256 KiB or nesting deeper than the profile's
+  `max_depth`, counted before the value is parsed. One request with a
+  100,000-deep `[[[...]]]` value overflowed the stack and killed the
+  server.
+- `noyalib_parse`, `noyalib_edit` and `noyalib_validate` refuse YAML
+  text over the profile's document limit before parsing it, with the
+  same message for all three.
+- Error messages repeat at most 120 bytes of a client's path or value
+  and give its length; a refused 40 KB value was echoed in full.
+- The stateless tools run on the blocking pool too.
+
+### Added
+
+- `edit_with_profile`, the `noyalib_edit` counterpart of
+  `parse_with_profile`, and `MAX_FRAGMENT_BYTES`.
 
 ## [v0.0.54] - 2026-10-07
 

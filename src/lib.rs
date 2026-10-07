@@ -106,10 +106,10 @@ pub mod resources;
 pub mod tools;
 
 pub use tools::{
-    EditArgs, EditOutput, GetArgs, GetOutput, ParseArgs, ParseOutput, ParseProfile, SetArgs,
-    SetMultidocArgs, SetMultidocOutput, SetOutput, TOOL_NAMES, ValidateArgs, ValidateOutput,
-    Violation, edit, get, parse, parse_with_profile, set, set_multidoc, validate,
-    validate_with_profile,
+    EditArgs, EditOutput, GetArgs, GetOutput, MAX_FRAGMENT_BYTES, ParseArgs, ParseOutput,
+    ParseProfile, SetArgs, SetMultidocArgs, SetMultidocOutput, SetOutput, TOOL_NAMES, ValidateArgs,
+    ValidateOutput, Violation, edit, edit_with_profile, get, parse, parse_with_profile, set,
+    set_multidoc, validate, validate_with_profile,
 };
 
 /// One hour, in milliseconds: the freshness hint on the cacheable

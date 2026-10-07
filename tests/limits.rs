@@ -166,3 +166,68 @@ fn a_file_over_the_size_limit_is_refused_unread() {
     assert!(text(&r).contains("limit"), "{r}");
     let _ = std::fs::remove_dir_all(root);
 }
+
+/// `[` n deep: the shape that recursed once per bracket.
+fn nested(n: usize) -> String {
+    "[".repeat(n) + &"]".repeat(n)
+}
+
+#[test]
+fn a_deeply_nested_fragment_is_refused_and_the_server_lives() {
+    let root = scratch("deep");
+    std::fs::write(root.join("f.yml"), "a: 1\n").expect("fixture");
+    std::fs::write(root.join("m.yml"), "a: 1\n---\nb: 2\n").expect("fixture");
+    let mut s = Session::start(&root);
+    let deep = nested(100_000);
+    let calls = [
+        (
+            "noyalib_edit",
+            json!({"yaml": "a: 1\n", "path": "a", "value": deep}),
+        ),
+        (
+            "noyalib_set",
+            json!({"file": "f.yml", "path": "a", "value": deep}),
+        ),
+        (
+            "noyalib_set_multidoc",
+            json!({"file": "m.yml", "doc_index": 1, "path": "b", "value": deep}),
+        ),
+    ];
+    for (tool, args) in calls {
+        let id = s.call(tool, args);
+        let r = s
+            .reply(id, Duration::from_secs(30))
+            .unwrap_or_else(|| panic!("{tool}: no reply, the server died"));
+        assert_eq!(r["result"]["isError"], true, "{tool}");
+        // The error names the problem and does not echo 200 KB back.
+        assert!(text(&r).len() < 1024, "{tool}: {} bytes", text(&r).len());
+        let id = s.call("noyalib_parse", json!({"yaml": "ok: 1\n"}));
+        let next = s.reply(id, Duration::from_secs(10));
+        assert!(next.is_some(), "{tool}: the next call went unanswered");
+    }
+    let file = std::fs::read_to_string(root.join("f.yml")).expect("read");
+    assert_eq!(file, "a: 1\n");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn yaml_text_over_the_document_limit_is_refused_before_parsing() {
+    // Strict profile: 1 MiB. Each stateless tool refuses a 2 MiB text.
+    let root = scratch("long");
+    let mut s = Session::start(&root);
+    let long = format!("a: {}\n", "x".repeat(2 << 20));
+    for (tool, args) in [
+        ("noyalib_parse", json!({"yaml": long})),
+        (
+            "noyalib_edit",
+            json!({"yaml": long, "path": "a", "value": "1"}),
+        ),
+        ("noyalib_validate", json!({"yaml": long})),
+    ] {
+        let id = s.call(tool, args);
+        let r = s.reply(id, Duration::from_secs(30)).expect("a reply");
+        assert_eq!(r["result"]["isError"], true, "{tool}: {r}");
+        assert!(text(&r).contains("limit"), "{tool}: {}", text(&r));
+    }
+    let _ = std::fs::remove_dir_all(root);
+}

@@ -261,7 +261,7 @@ pub(crate) fn get_at(
         None if doc.key_span(path).is_some() => Ok(GetOutput {
             value: String::new(),
         }),
-        None => Err(format!("path not found in {file}: {path}")),
+        None => Err(format!("path not found in {}: {}", clip(file), clip(path))),
     }
 }
 
@@ -292,9 +292,10 @@ pub(crate) fn set_at(
     config: &noyalib::ParserConfig,
 ) -> Result<SetOutput, String> {
     let (src, kept) = read_at(at, file, config)?;
+    check_fragment(value, config)?;
     let mut doc = parse_document(&src).map_err(|e| format!("parse {file}: {e}"))?;
     doc.set(path, value)
-        .map_err(|e| format!("set {path} = {value}: {e}"))?;
+        .map_err(|e| set_failed(path, value, &e))?;
     at.replace(doc.to_string().as_bytes(), kept)
         .map_err(|e| format!("write {file}: {e}"))?;
     Ok(SetOutput {
@@ -343,9 +344,10 @@ pub(crate) fn set_multidoc_at(
             docs.len()
         ));
     }
+    check_fragment(value, config)?;
     docs[doc_index]
         .set(path, value)
-        .map_err(|e| format!("set {path} = {value}: {e}"))?;
+        .map_err(|e| set_failed(path, value, &e))?;
     let out: String = docs.iter().map(ToString::to_string).collect();
     at.replace(out.as_bytes(), kept)
         .map_err(|e| format!("write {file}: {e}"))?;
@@ -372,6 +374,7 @@ pub fn parse(yaml: &str) -> Result<ParseOutput, String> {
 ///
 /// The text does not parse under the profile's rules and limits.
 pub fn parse_with_profile(yaml: &str, profile: ParseProfile) -> Result<ParseOutput, String> {
+    check_text(yaml, &profile.config())?;
     let docs: Vec<noyalib::Value> = noyalib::load_all_with_config(yaml, &profile.config())
         .and_then(Iterator::collect)
         .map_err(|e| format!("parse: {e}"))?;
@@ -383,19 +386,151 @@ pub fn parse_with_profile(yaml: &str, profile: ParseProfile) -> Result<ParseOutp
 }
 
 /// Set one value in YAML text and return the whole edited text.
-/// Nothing on disk is touched.
+/// Nothing on disk is touched. The text is parsed under the library's
+/// default limits ([`ParseProfile::Standard`]).
 ///
 /// # Errors
 ///
 /// The text does not parse, or the fragment cannot be applied at the
 /// path.
 pub fn edit(yaml: &str, path: &str, value: &str) -> Result<EditOutput, String> {
+    edit_with_profile(yaml, path, value, ParseProfile::Standard)
+}
+
+/// [`edit`] under an explicit [`ParseProfile`]: its document size and
+/// nesting limits apply to the text and to the fragment.
+///
+/// # Errors
+///
+/// The text or the fragment is over the profile's limits, the text
+/// does not parse, or the fragment cannot be applied at the path.
+pub fn edit_with_profile(
+    yaml: &str,
+    path: &str,
+    value: &str,
+    profile: ParseProfile,
+) -> Result<EditOutput, String> {
+    let config = profile.config();
+    check_text(yaml, &config)?;
+    check_fragment(value, &config)?;
     let mut doc = parse_document(yaml).map_err(|e| format!("parse: {e}"))?;
     doc.set(path, value)
-        .map_err(|e| format!("set {path} = {value}: {e}"))?;
+        .map_err(|e| set_failed(path, value, &e))?;
     Ok(EditOutput {
         yaml: doc.to_string(),
     })
+}
+
+// --- Request limits ------------------------------------------------------
+
+/// The largest replacement fragment `noyalib_set`,
+/// `noyalib_set_multidoc` and `noyalib_edit` take, in bytes. A value
+/// is one node of a document; this is far beyond any real one.
+pub const MAX_FRAGMENT_BYTES: usize = 256 * 1024;
+
+/// How much of a client's value an error message repeats.
+const ECHO_BYTES: usize = 120;
+
+/// `text` as an error message may repeat it: whole when short, else
+/// its start and its length.
+fn clip(text: &str) -> std::borrow::Cow<'_, str> {
+    if text.len() <= ECHO_BYTES {
+        return text.into();
+    }
+    let mut end = ECHO_BYTES;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}... ({} bytes)", &text[..end], text.len()).into()
+}
+
+/// The message for a fragment the document refused.
+fn set_failed(path: &str, value: &str, e: &impl fmt::Display) -> String {
+    format!("set {} = {}: {e}", clip(path), clip(value))
+}
+
+/// Refuse YAML text longer than the profile's document limit before
+/// anything parses it.
+fn check_text(yaml: &str, config: &noyalib::ParserConfig) -> Result<(), String> {
+    if yaml.len() > config.max_document_length {
+        return Err(format!(
+            "the YAML text is {} bytes, over the {}-byte document limit",
+            yaml.len(),
+            config.max_document_length
+        ));
+    }
+    Ok(())
+}
+
+/// Refuse a replacement fragment that is too long or nests deeper than
+/// the profile allows, before the document parses it.
+///
+/// The fragment is parsed on its own before the edited document is
+/// checked against the limits, so the nesting is bounded here, by a
+/// linear count that never under-estimates.
+fn check_fragment(value: &str, config: &noyalib::ParserConfig) -> Result<(), String> {
+    if value.len() > MAX_FRAGMENT_BYTES {
+        return Err(format!(
+            "the value is {} bytes, over the {MAX_FRAGMENT_BYTES}-byte fragment limit",
+            value.len()
+        ));
+    }
+    let depth = nesting_depth(value);
+    if depth > config.max_depth {
+        return Err(format!(
+            "the value nests {depth} levels deep, over the limit of {}",
+            config.max_depth
+        ));
+    }
+    Ok(())
+}
+
+/// An upper bound on how deep `text` nests, in one pass.
+///
+/// Every level of YAML nesting is opened by a flow bracket, a deeper
+/// indentation, or a block indicator (`- `, `? `, `: `) on the line.
+/// The count takes all three everywhere, quoted text and comments
+/// included, so it can over-count but never under-count.
+pub(crate) fn nesting_depth(text: &str) -> usize {
+    let mut flow = 0usize;
+    let mut indents: Vec<usize> = Vec::new();
+    let mut deepest = 0;
+    for line in text.lines() {
+        let body = line.trim_start_matches(' ');
+        let indent = line.len() - body.len();
+        if !body.trim().is_empty() {
+            while indents.last().is_some_and(|&top| top > indent) {
+                let _ = indents.pop();
+            }
+            if indents.last().is_none_or(|&top| top < indent) {
+                indents.push(indent);
+            }
+        }
+        let (indicators, peak) = scan_line(body, &mut flow);
+        deepest = deepest.max(indents.len() + indicators + peak);
+    }
+    deepest
+}
+
+/// The block indicators on one line, and the deepest flow nesting it
+/// reaches; `flow` carries the open brackets from line to line.
+fn scan_line(body: &str, flow: &mut usize) -> (usize, usize) {
+    let bytes = body.as_bytes();
+    let mut indicators = 0;
+    let mut peak = *flow;
+    for (i, &b) in bytes.iter().enumerate() {
+        let spaced = bytes.get(i + 1).is_none_or(|n| *n == b' ' || *n == b'\t');
+        match b {
+            b'[' | b'{' => {
+                *flow += 1;
+                peak = peak.max(*flow);
+            }
+            b']' | b'}' => *flow = flow.saturating_sub(1),
+            b'-' | b'?' | b':' if spaced => indicators += 1,
+            _ => {}
+        }
+    }
+    (indicators, peak)
 }
 
 /// Check that YAML text parses and, when `schema` is given, that it
@@ -424,44 +559,14 @@ pub fn validate_with_profile(
     schema: Option<&str>,
     profile: ParseProfile,
 ) -> Result<ValidateOutput, String> {
-    let value = match noyalib::from_str_with_config::<noyalib::Value>(yaml, &profile.config()) {
+    let value = match parse_for_validation(yaml, &profile.config()) {
         Ok(v) => v,
-        Err(e) => {
-            let (line, column) = e.location().map_or((0, 0), |l| (l.line(), l.column()));
-            return Ok(ValidateOutput {
-                valid: false,
-                error: Some(e.to_string()),
-                line: Some(line),
-                column: Some(column),
-                violations: Vec::new(),
-            });
-        }
+        Err(verdict) => return Ok(verdict),
     };
-    let Some(schema_text) = schema else {
-        return Ok(ValidateOutput {
-            valid: true,
-            error: None,
-            line: None,
-            column: None,
-            violations: Vec::new(),
-        });
+    let violations = match schema {
+        Some(schema_text) => schema_violations(&value, schema_text)?,
+        None => Vec::new(),
     };
-    let schema: JsonValue =
-        serde_json::from_str(schema_text).map_err(|e| format!("schema is not JSON: {e}"))?;
-    let schema_value: noyalib::Value =
-        serde_json::from_value(schema).map_err(|e| format!("schema: {e}"))?;
-    let compiled =
-        noyalib::CompiledSchema::compile(&schema_value).map_err(|e| format!("schema: {e}"))?;
-    let violations: Vec<Violation> = compiled
-        .iter_errors(&value)
-        .map_err(internal)?
-        .iter()
-        .map(|v| Violation {
-            path: v.instance_path.clone(),
-            keyword: v.keyword.clone(),
-            message: v.message.clone(),
-        })
-        .collect();
     Ok(ValidateOutput {
         valid: violations.is_empty(),
         error: None,
@@ -469,6 +574,46 @@ pub fn validate_with_profile(
         column: None,
         violations,
     })
+}
+
+/// The document `noyalib_validate` checks, or the verdict that it does
+/// not parse.
+fn parse_for_validation(
+    yaml: &str,
+    config: &noyalib::ParserConfig,
+) -> Result<noyalib::Value, ValidateOutput> {
+    let failed = |error: String, line, column| ValidateOutput {
+        valid: false,
+        error: Some(error),
+        line: Some(line),
+        column: Some(column),
+        violations: Vec::new(),
+    };
+    check_text(yaml, config).map_err(|e| failed(e, 0, 0))?;
+    noyalib::from_str_with_config::<noyalib::Value>(yaml, config).map_err(|e| {
+        let (line, column) = e.location().map_or((0, 0), |l| (l.line(), l.column()));
+        failed(e.to_string(), line, column)
+    })
+}
+
+/// Every violation of the JSON Schema `schema_text` by `value`.
+fn schema_violations(value: &noyalib::Value, schema_text: &str) -> Result<Vec<Violation>, String> {
+    let schema: JsonValue =
+        serde_json::from_str(schema_text).map_err(|e| format!("schema is not JSON: {e}"))?;
+    let schema_value: noyalib::Value =
+        serde_json::from_value(schema).map_err(|e| format!("schema: {e}"))?;
+    let compiled =
+        noyalib::CompiledSchema::compile(&schema_value).map_err(|e| format!("schema: {e}"))?;
+    Ok(compiled
+        .iter_errors(value)
+        .map_err(internal)?
+        .iter()
+        .map(|v| Violation {
+            path: v.instance_path.clone(),
+            keyword: v.keyword.clone(),
+            message: v.message.clone(),
+        })
+        .collect())
 }
 
 /// An error no request can provoke (a JSON conversion of a value the
@@ -767,11 +912,13 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<ParseOutput>()
     )]
-    fn noyalib_parse(
+    async fn noyalib_parse(
         &self,
         Parameters(args): Parameters<ParseArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(parse_with_profile(&args.yaml, self.profile()), |_| false)
+        let profile = self.profile();
+        let outcome = off_thread(move || parse_with_profile(&args.yaml, profile));
+        reply(outcome.await, |_| false)
     }
 
     #[tool(
@@ -791,11 +938,14 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<EditOutput>()
     )]
-    fn noyalib_edit(
+    async fn noyalib_edit(
         &self,
         Parameters(args): Parameters<EditArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(edit(&args.yaml, &args.path, &args.value), |_| false)
+        let profile = self.profile();
+        let outcome =
+            off_thread(move || edit_with_profile(&args.yaml, &args.path, &args.value, profile));
+        reply(outcome.await, |_| false)
     }
 
     #[tool(
@@ -815,17 +965,17 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<ValidateOutput>()
     )]
-    fn noyalib_validate(
+    async fn noyalib_validate(
         &self,
         Parameters(args): Parameters<ValidateArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        let profile = self.profile();
+        let outcome =
+            off_thread(move || validate_with_profile(&args.yaml, args.schema.as_deref(), profile));
         // An invalid document is a failure the model must see, so it
         // is flagged `isError` -- but it is also a complete verdict, so
         // the structured half is kept.
-        reply(
-            validate_with_profile(&args.yaml, args.schema.as_deref(), self.profile()),
-            |v| !v.valid,
-        )
+        reply(outcome.await, |v| !v.valid)
     }
 }
 
@@ -877,9 +1027,9 @@ mod tests {
                     "noyalib_get" => server.noyalib_get(args(v)).await,
                     "noyalib_set" => server.noyalib_set(args(v)).await,
                     "noyalib_set_multidoc" => server.noyalib_set_multidoc(args(v)).await,
-                    "noyalib_parse" => server.noyalib_parse(args(v)),
-                    "noyalib_edit" => server.noyalib_edit(args(v)),
-                    "noyalib_validate" => server.noyalib_validate(args(v)),
+                    "noyalib_parse" => server.noyalib_parse(args(v)).await,
+                    "noyalib_edit" => server.noyalib_edit(args(v)).await,
+                    "noyalib_validate" => server.noyalib_validate(args(v)).await,
                     other => panic!("no such tool {other}"),
                 }
             })
@@ -1447,6 +1597,76 @@ mod tests {
         assert_eq!(stray.len(), 1, "temp files landed outside: {stray:?}");
         let _ = fs::remove_dir_all(root);
         let _ = fs::remove_dir_all(outside);
+    }
+
+    // ── request limits ───────────────────────────────────────────────
+
+    #[test]
+    fn nesting_depth_never_under_counts() {
+        let cases = [
+            ("1", 1),
+            ("[1, [2, [3]]]", 4),
+            ("{a: {b: [c]}}", 4),
+            ("- - - x", 4),
+            ("a:\n  b:\n    c: 1\n", 4),
+            ("a:\n- b\n- c\n", 2),
+            ("[\n [\n  [\n  ]\n ]\n]\n", 6),
+            ("? a\n: b\n", 2),
+        ];
+        for (text, at_least) in cases {
+            let got = nesting_depth(text);
+            assert!(got >= at_least, "{text:?}: {got} < {at_least}");
+        }
+        assert_eq!(nesting_depth(&"[".repeat(100_000)), 100_001);
+        assert_eq!(nesting_depth(&"- ".repeat(100_000)), 100_001);
+        assert!(nesting_depth("plain scalar text") < 3);
+    }
+
+    #[test]
+    fn fragments_are_checked_against_the_profile() {
+        let strict = ParseProfile::Strict.config();
+        let deep = "[".repeat(65) + &"]".repeat(65);
+        let err = check_fragment(&deep, &strict).unwrap_err();
+        assert!(err.contains("over the limit of 64"), "{err}");
+        assert!(check_fragment(&deep, &ParseProfile::Standard.config()).is_ok());
+        let long = "x".repeat(MAX_FRAGMENT_BYTES + 1);
+        let err = check_fragment(&long, &strict).unwrap_err();
+        assert!(err.contains("fragment limit"), "{err}");
+        assert!(check_fragment("[1, 2, {a: b}]", &strict).is_ok());
+    }
+
+    #[test]
+    fn edit_refuses_a_deep_fragment_without_echoing_it() {
+        let deep = "[".repeat(100_000) + &"]".repeat(100_000);
+        let err = edit_with_profile("a: 1\n", "a", &deep, ParseProfile::Strict).unwrap_err();
+        assert!(err.contains("nests"), "{err}");
+        // A 40 KB fragment the document refuses is named, not repeated.
+        let bad = format!("\"{}", "x".repeat(40_000));
+        let err = edit("a: 1\n", "a", &bad).unwrap_err();
+        assert!(err.len() < 600, "{} bytes: {err}", err.len());
+        assert!(err.contains("(40001 bytes)"), "{err}");
+    }
+
+    #[test]
+    fn clip_keeps_short_text_and_cuts_on_a_char_boundary() {
+        assert_eq!(clip("short"), "short");
+        let long = "é".repeat(100);
+        let clipped = clip(&long);
+        assert!(clipped.ends_with("... (200 bytes)"), "{clipped}");
+        assert!(clipped.len() < 140);
+    }
+
+    #[test]
+    fn text_over_the_document_limit_is_refused_before_parsing() {
+        let long = format!("a: {}\n", "x".repeat(1 << 20));
+        let err = parse(&long).unwrap_err();
+        assert!(err.contains("document limit"), "{err}");
+        let err = edit_with_profile(&long, "a", "1", ParseProfile::Strict).unwrap_err();
+        assert!(err.contains("document limit"), "{err}");
+        let verdict = validate(&long, None).unwrap();
+        assert!(!verdict.valid);
+        assert!(verdict.error.unwrap().contains("document limit"));
+        assert!(parse_with_profile(&long, ParseProfile::Standard).is_ok());
     }
 
     // ── parse profile ────────────────────────────────────────────────
