@@ -47,6 +47,8 @@ struct SseState<H> {
     shutdown: CancellationToken,
     /// The `Host` and `Origin` checks both routes apply.
     guard: Guard,
+    /// How many sessions may be open at once.
+    max_sessions: usize,
 }
 
 /// `?sessionId=...` on the message endpoint.
@@ -71,6 +73,7 @@ where
         sessions: Sessions::default(),
         shutdown: shutdown.clone(),
         guard: Guard::for_bind_host(&options.host),
+        max_sessions: options.max_sessions,
     });
     let router = Router::new()
         .route(SSE_PATH, get(open_stream::<H>))
@@ -103,11 +106,20 @@ async fn open_stream<H: ServerHandler>(
     let (inbox, from_client) = mpsc::channel::<ClientJsonRpcMessage>(32);
     let (to_client, outbox) = mpsc::channel::<ServerJsonRpcMessage>(32);
     let ct = state.shutdown.child_token();
-    let _ = state
-        .sessions
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .insert(id.clone(), inbox);
+    {
+        let mut sessions = state
+            .sessions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if sessions.len() >= state.max_sessions {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "the server holds its session limit; close a session or retry later",
+            )
+                .into_response();
+        }
+        let _ = sessions.insert(id.clone(), inbox);
+    }
 
     let handler = (state.factory)();
     let session_ct = ct.clone();
@@ -235,6 +247,7 @@ mod tests {
             sessions: Sessions::default(),
             shutdown: CancellationToken::new(),
             guard: Guard::for_bind_host("127.0.0.1"),
+            max_sessions: 1,
         };
         assert_eq!(format!("{state:?}"), "SseState { .. }");
     }

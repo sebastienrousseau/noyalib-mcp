@@ -63,6 +63,9 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 - Without `--root`, the server refuses to start (exit 2) when its
   working directory is the filesystem root or the home directory. A
   client that spawns it from `/` gave the file tools the whole disk.
+- The HTTP transports hold at most 64 sessions at once (`--max-sessions`
+  sets it). A client could open sessions faster than they expire:
+  20,000 were accepted.
 
 ### Changed (behaviour)
 
@@ -78,6 +81,7 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   `parse_with_profile`, `YamlServer::with_call_timeout`, and the
   constants `MAX_FRAGMENT_BYTES`, `MAX_SCHEMA_BYTES`, `MAX_VIOLATIONS`
   and `DEFAULT_CALL_TIMEOUT`.
+- `--max-sessions <n>` for the HTTP transports.
 
 ## [v0.0.54] - 2026-10-07
 

@@ -26,8 +26,13 @@ struct Server {
 
 impl Server {
     fn start(transport: &str) -> Self {
+        Self::start_with(transport, &[])
+    }
+
+    fn start_with(transport: &str, extra: &[&str]) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_noyalib-mcp"))
             .args(["--transport", transport, "--port", "0"])
+            .args(extra)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -725,6 +730,66 @@ fn streamable_http_refuses_a_foreign_origin() {
         "/mcp",
         &[ACCEPT_BOTH, JSON, ("Origin", "http://127.0.0.1:9")],
         &initialize("2025-11-25"),
+    );
+    assert_eq!(r.status, 200);
+}
+
+#[test]
+fn sse_caps_the_number_of_live_sessions() {
+    let server = Server::start_with("sse", &["--max-sessions", "2"]);
+    let mut first = Http::send(&server.addr, "GET", "/sse", &[], "");
+    let _ = first.next_event();
+    let mut second = Http::send(&server.addr, "GET", "/sse", &[], "");
+    let _ = second.next_event();
+    let third = Http::send(&server.addr, "GET", "/sse", &[], "");
+    assert_eq!(third.status, 503);
+    // Hanging up frees the slot.
+    drop(first);
+    let mut status = 0;
+    for _ in 0..50 {
+        let mut again = Http::send(&server.addr, "GET", "/sse", &[], "");
+        status = again.status;
+        if status == 200 {
+            let (event, _) = again.next_event();
+            assert_eq!(event, "endpoint");
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert_eq!(status, 200, "the slot was not freed");
+}
+
+#[test]
+fn streamable_http_caps_the_number_of_live_sessions() {
+    let server = Server::start_with("streamable-http", &["--max-sessions", "2"]);
+    let open = || {
+        Http::send(
+            &server.addr,
+            "POST",
+            "/mcp",
+            &[ACCEPT_BOTH, JSON],
+            &initialize("2025-11-25"),
+        )
+    };
+    let a = open();
+    assert_eq!(a.status, 200);
+    let b = open();
+    assert_eq!(b.status, 200);
+    let c = open();
+    assert_ne!(c.status, 200, "a third session was created");
+    assert!(c.body().contains("session limit"));
+    // A request with no session (the stateless revision) still works.
+    let r = Http::send(
+        &server.addr,
+        "POST",
+        "/mcp",
+        &[
+            ACCEPT_BOTH,
+            JSON,
+            ("MCP-Protocol-Version", "2026-07-28"),
+            ("Mcp-Method", "server/discover"),
+        ],
+        &stateless(7, "server/discover", json!({})),
     );
     assert_eq!(r.status, 200);
 }

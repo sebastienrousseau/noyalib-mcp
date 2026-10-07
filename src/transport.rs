@@ -37,7 +37,6 @@ use noyalib_mcp::ParseProfile;
 use std::process::ExitCode;
 
 use axum::Router;
-use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
 use rmcp::{ServerHandler, ServiceExt};
 use tokio::net::TcpListener;
@@ -47,6 +46,9 @@ use tokio_util::sync::CancellationToken;
 pub const DEFAULT_HOST: &str = "127.0.0.1";
 /// The port the HTTP transports listen on unless told otherwise.
 pub const DEFAULT_PORT: u16 = 8000;
+/// How many sessions an HTTP transport holds at once unless told
+/// otherwise.
+pub const DEFAULT_MAX_SESSIONS: usize = 64;
 /// The streamable HTTP endpoint.
 pub const STREAMABLE_HTTP_PATH: &str = "/mcp";
 /// Where the legacy transport's event stream is opened.
@@ -91,6 +93,9 @@ pub struct Options {
     pub root: Option<PathBuf>,
     /// The rules the parse tools apply.
     pub profile: ParseProfile,
+    /// How many sessions an HTTP transport holds at once; past it, a
+    /// new one is refused.
+    pub max_sessions: usize,
 }
 
 impl Default for Options {
@@ -101,6 +106,7 @@ impl Default for Options {
             port: DEFAULT_PORT,
             root: None,
             profile: ParseProfile::default(),
+            max_sessions: DEFAULT_MAX_SESSIONS,
         }
     }
 }
@@ -121,7 +127,8 @@ pub enum Command {
 pub fn usage(name: &str) -> String {
     format!(
         "Usage: {name} [--transport <stdio|streamable-http|sse>] \
-         [--host <address>] [--port <number>] [--root <dir>] [--profile <strict|standard>]\n\
+         [--host <address>] [--port <number>] [--root <dir>] [--profile <strict|standard>] \
+         [--max-sessions <n>]\n\
          \n\
          Options:\n\
          \x20 --transport <name>  stdio (default), streamable-http, or sse\n\
@@ -133,6 +140,8 @@ pub fn usage(name: &str) -> String {
          (default: the working directory, unless that is / or the home directory)\n\
          \x20 --profile <name>    rules every tool parses under: \
          strict (default) or standard\n\
+         \x20 --max-sessions <n>  sessions an HTTP transport holds at once \
+         (default {DEFAULT_MAX_SESSIONS})\n\
          \x20 --version           print the version and exit\n\
          \x20 --help              print this text and exit\n\
          \n\
@@ -191,7 +200,7 @@ fn apply_flag(
 ) -> Result<(), String> {
     if !matches!(
         flag,
-        "--transport" | "--host" | "--port" | "--root" | "--profile"
+        "--transport" | "--host" | "--port" | "--root" | "--profile" | "--max-sessions"
     ) {
         return Err(format!("unknown argument `{flag}`"));
     }
@@ -202,6 +211,7 @@ fn apply_flag(
         "--transport" => options.transport = parse_transport(&value)?,
         "--port" => options.port = parse_port(&value)?,
         "--root" => options.root = Some(PathBuf::from(value)),
+        "--max-sessions" => options.max_sessions = parse_max_sessions(&value)?,
         "--profile" => {
             options.profile = ParseProfile::from_name(&value)
                 .ok_or_else(|| format!("unknown profile `{value}`; choose strict or standard"))?;
@@ -214,6 +224,13 @@ fn apply_flag(
 fn parse_transport(name: &str) -> Result<Transport, String> {
     Transport::parse(name)
         .ok_or_else(|| format!("unknown transport `{name}`; choose stdio, streamable-http or sse"))
+}
+
+fn parse_max_sessions(text: &str) -> Result<usize, String> {
+    text.parse()
+        .ok()
+        .filter(|n| *n > 0)
+        .ok_or_else(|| format!("`{text}` is not a positive number of sessions"))
 }
 
 fn parse_port(text: &str) -> Result<u16, String> {
@@ -433,7 +450,7 @@ where
     .with_allowed_origins(guard::allowed_origins(&options.host));
     let service = StreamableHttpService::new(
         move || Ok(factory()),
-        LocalSessionManager::default().into(),
+        CappedSessions::new(options.max_sessions).into(),
         config,
     );
     let router = Router::new().nest_service(STREAMABLE_HTTP_PATH, service);
@@ -446,7 +463,9 @@ where
 }
 
 mod guard;
+mod sessions;
 mod sse;
+use sessions::CappedSessions;
 use sse::serve_sse;
 
 #[cfg(test)]
@@ -469,6 +488,7 @@ mod tests {
             port: 9000,
             root: None,
             profile: ParseProfile::Strict,
+            max_sessions: DEFAULT_MAX_SESSIONS,
         };
         assert_eq!(
             parse([
@@ -522,6 +542,20 @@ mod tests {
             }))
         );
         assert!(parse(["--profile", "lax"]).is_err_and(|e| e.contains("lax")));
+    }
+
+    #[test]
+    fn max_sessions_takes_a_positive_count() {
+        assert_eq!(
+            parse(["--max-sessions", "3"]),
+            Ok(Command::Serve(Options {
+                max_sessions: 3,
+                ..Options::default()
+            }))
+        );
+        for bad in ["0", "-1", "many"] {
+            assert!(parse(["--max-sessions", bad]).is_err_and(|e| e.contains(bad)));
+        }
     }
 
     #[test]
