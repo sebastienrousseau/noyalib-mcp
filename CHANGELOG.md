@@ -11,7 +11,7 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
-## [v0.0.54] - Unreleased
+## [v0.0.54] - 2026-10-07
 
 ### Added
 
@@ -35,6 +35,10 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   resource limits apply. Text the standard profile accepted may now be
   refused; start the server with `--profile standard` for the previous
   behaviour.
+- The release gate refuses a tag while `deny.toml` allows any git source,
+  next to its refusal of the pre-release `[patch]`, so cargo-deny can
+  allow the core's branch during the iteration without that allowance
+  reaching a release.
 
 ## [v0.0.53] - 2026-10-06
 
