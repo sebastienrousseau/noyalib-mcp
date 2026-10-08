@@ -49,8 +49,10 @@ For environments without a Rust toolchain (the typical AI-agent
 deployment shape):
 
 ```bash
-# npm wrapper — auto-downloads the matching binary on first run,
-# caches under ~/.cache/noyalib-mcp/<version>/.
+# npm wrapper: downloads the matching binary on first run, checks it
+# against the SHA-256 in the package, caches it under
+# ~/.cache/noyalib-mcp/<version>/. It refuses to run until releases
+# publish per-platform archives and their digests.
 npx @sebastienrousseau/noyalib-mcp
 
 # Container — multi-arch (linux/amd64, linux/arm64).
@@ -241,7 +243,7 @@ attached to releases yet. To verify a release artefact:
 
 ```bash
 COSIGN_EXPERIMENTAL=1 cosign verify-blob \
-  --certificate-identity-regexp 'https://github.com/sebastienrousseau/noyalib-mcp/' \
+  --certificate-identity-regexp '^https://github\.com/sebastienrousseau/noyalib-mcp/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   --bundle <artefact>.bundle \
   <artefact>

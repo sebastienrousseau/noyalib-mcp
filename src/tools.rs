@@ -13,9 +13,11 @@
 //! file -- comments, indentation, sibling entries -- survive.
 
 use std::fmt;
+#[cfg(test)]
 use std::fs;
+use std::path::Path;
 
-use noyalib::cst::{parse_document, parse_stream};
+use noyalib::cst::{parse_document_with_config, parse_stream_with_config};
 use rmcp::handler::server::tool::schema_for_output;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ContentBlock, ErrorData};
@@ -25,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use crate::YamlServer;
+use crate::fsio::{FileError, Kept, Located, RootDir};
 
 // --- Outputs -------------------------------------------------------------
 
@@ -163,15 +166,17 @@ impl fmt::Display for ValidateOutput {
 
 // --- Parse profile ------------------------------------------------------
 
-/// The rules `noyalib_parse` and `noyalib_validate` parse under.
+/// The rules every tool parses under.
 ///
 /// The server's input is whatever a client sends, so the default is
 /// noyalib's strict YAML 1.2 profile, the one built for untrusted
 /// input: duplicate keys are an error rather than last-wins, only
 /// `true` and `false` are booleans, indentation must be even, and the
 /// tighter resource limits apply. `--profile standard` restores the
-/// library defaults. The file tools and `noyalib_edit` go through the
-/// lossless CST and are not affected.
+/// library defaults. The file tools and `noyalib_edit` parse through
+/// the lossless CST under the same rules and limits, and the profile's
+/// document limit also caps the size of a file read and of YAML text
+/// in a request.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ParseProfile {
     /// `ParserConfig::strict()`.
@@ -215,8 +220,38 @@ impl ParseProfile {
 /// The file cannot be read, does not parse, or has no such path. The
 /// message says which.
 pub fn get(file: &str, path: &str) -> Result<GetOutput, String> {
-    let src = fs::read_to_string(file).map_err(|e| format!("read {file}: {e}"))?;
-    let doc = parse_document(&src).map_err(|e| format!("parse {file}: {e}"))?;
+    get_at(
+        &locate_unconfined(file)?,
+        file,
+        path,
+        &noyalib::ParserConfig::default(),
+    )
+}
+
+/// Locate a file the library functions were given, with no root.
+fn locate_unconfined(file: &str) -> Result<Located, String> {
+    Located::unconfined(Path::new(file)).map_err(|e| format!("read {file}: {e}"))
+}
+
+/// Read a located file within `config`'s document size limit.
+fn read_at(
+    at: &Located,
+    file: &str,
+    config: &noyalib::ParserConfig,
+) -> Result<(String, Kept), String> {
+    at.read(config.max_document_length)
+        .map_err(|e| format!("read {file}: {e}"))
+}
+
+/// [`get`] on a file already located; `file` is how to name it.
+pub(crate) fn get_at(
+    at: &Located,
+    file: &str,
+    path: &str,
+    config: &noyalib::ParserConfig,
+) -> Result<GetOutput, String> {
+    let (src, _) = read_at(at, file, config)?;
+    let doc = parse_document_with_config(&src, config).map_err(|e| format!("parse {file}: {e}"))?;
     match doc.get(path) {
         Some(value) => Ok(GetOutput {
             value: value.to_string(),
@@ -228,7 +263,7 @@ pub fn get(file: &str, path: &str) -> Result<GetOutput, String> {
         None if doc.key_span(path).is_some() => Ok(GetOutput {
             value: String::new(),
         }),
-        None => Err(format!("path not found in {file}: {path}")),
+        None => Err(format!("path not found in {}: {}", clip(file), clip(path))),
     }
 }
 
@@ -241,11 +276,31 @@ pub fn get(file: &str, path: &str) -> Result<GetOutput, String> {
 /// cannot be applied at the path. The file is unchanged on any of
 /// them.
 pub fn set(file: &str, path: &str, value: &str) -> Result<SetOutput, String> {
-    let src = fs::read_to_string(file).map_err(|e| format!("read {file}: {e}"))?;
-    let mut doc = parse_document(&src).map_err(|e| format!("parse {file}: {e}"))?;
+    set_at(
+        &locate_unconfined(file)?,
+        file,
+        path,
+        value,
+        &noyalib::ParserConfig::default(),
+    )
+}
+
+/// [`set`] on a file already located; `file` is how to name it.
+pub(crate) fn set_at(
+    at: &Located,
+    file: &str,
+    path: &str,
+    value: &str,
+    config: &noyalib::ParserConfig,
+) -> Result<SetOutput, String> {
+    let (src, kept) = read_at(at, file, config)?;
+    check_fragment(value, config)?;
+    let mut doc =
+        parse_document_with_config(&src, config).map_err(|e| format!("parse {file}: {e}"))?;
     doc.set(path, value)
-        .map_err(|e| format!("set {path} = {value}: {e}"))?;
-    write_atomic(file, doc.to_string().as_bytes()).map_err(|e| format!("write {file}: {e}"))?;
+        .map_err(|e| set_failed(path, value, &e))?;
+    at.replace(doc.to_string().as_bytes(), kept)
+        .map_err(|e| format!("write {file}: {e}"))?;
     Ok(SetOutput {
         file: file.to_owned(),
         path: path.to_owned(),
@@ -265,23 +320,41 @@ pub fn set_multidoc(
     path: &str,
     value: &str,
 ) -> Result<SetMultidocOutput, String> {
-    let src = fs::read_to_string(file).map_err(|e| format!("read {file}: {e}"))?;
+    let at = locate_unconfined(file)?;
+    let config = noyalib::ParserConfig::default();
+    set_multidoc_at(&at, file, doc_index, path, value, &config)
+}
+
+/// [`set_multidoc`] on a file already located; `file` is how to name
+/// it.
+pub(crate) fn set_multidoc_at(
+    at: &Located,
+    file: &str,
+    doc_index: usize,
+    path: &str,
+    value: &str,
+    config: &noyalib::ParserConfig,
+) -> Result<SetMultidocOutput, String> {
+    let (src, kept) = read_at(at, file, config)?;
     // parse_stream keeps each `---`-delimited document as its own
     // lossless Document, retaining its separator; concatenating their
     // rendered forms reproduces the stream byte-for-byte, so editing one
     // document leaves every other document untouched.
-    let mut docs = parse_stream(&src).map_err(|e| format!("parse {file}: {e}"))?;
+    let mut docs =
+        parse_stream_with_config(&src, config).map_err(|e| format!("parse {file}: {e}"))?;
     if doc_index >= docs.len() {
         return Err(format!(
             "doc_index {doc_index} out of range: stream has {} document(s)",
             docs.len()
         ));
     }
+    check_fragment(value, config)?;
     docs[doc_index]
         .set(path, value)
-        .map_err(|e| format!("set {path} = {value}: {e}"))?;
+        .map_err(|e| set_failed(path, value, &e))?;
     let out: String = docs.iter().map(ToString::to_string).collect();
-    write_atomic(file, out.as_bytes()).map_err(|e| format!("write {file}: {e}"))?;
+    at.replace(out.as_bytes(), kept)
+        .map_err(|e| format!("write {file}: {e}"))?;
     Ok(SetMultidocOutput {
         file: file.to_owned(),
         doc_index,
@@ -305,6 +378,7 @@ pub fn parse(yaml: &str) -> Result<ParseOutput, String> {
 ///
 /// The text does not parse under the profile's rules and limits.
 pub fn parse_with_profile(yaml: &str, profile: ParseProfile) -> Result<ParseOutput, String> {
+    check_text(yaml, &profile.config())?;
     let docs: Vec<noyalib::Value> = noyalib::load_all_with_config(yaml, &profile.config())
         .and_then(Iterator::collect)
         .map_err(|e| format!("parse: {e}"))?;
@@ -316,20 +390,47 @@ pub fn parse_with_profile(yaml: &str, profile: ParseProfile) -> Result<ParseOutp
 }
 
 /// Set one value in YAML text and return the whole edited text.
-/// Nothing on disk is touched.
+/// Nothing on disk is touched. The text is parsed under the library's
+/// default limits ([`ParseProfile::Standard`]).
 ///
 /// # Errors
 ///
 /// The text does not parse, or the fragment cannot be applied at the
 /// path.
 pub fn edit(yaml: &str, path: &str, value: &str) -> Result<EditOutput, String> {
-    let mut doc = parse_document(yaml).map_err(|e| format!("parse: {e}"))?;
+    edit_with_profile(yaml, path, value, ParseProfile::Standard)
+}
+
+/// [`edit`] under an explicit [`ParseProfile`]: its document size and
+/// nesting limits apply to the text and to the fragment.
+///
+/// # Errors
+///
+/// The text or the fragment is over the profile's limits, the text
+/// does not parse, or the fragment cannot be applied at the path.
+pub fn edit_with_profile(
+    yaml: &str,
+    path: &str,
+    value: &str,
+    profile: ParseProfile,
+) -> Result<EditOutput, String> {
+    let config = profile.config();
+    check_text(yaml, &config)?;
+    check_fragment(value, &config)?;
+    let mut doc = parse_document_with_config(yaml, &config).map_err(|e| format!("parse: {e}"))?;
     doc.set(path, value)
-        .map_err(|e| format!("set {path} = {value}: {e}"))?;
+        .map_err(|e| set_failed(path, value, &e))?;
     Ok(EditOutput {
         yaml: doc.to_string(),
     })
 }
+
+mod limits;
+
+pub use limits::MAX_FRAGMENT_BYTES;
+#[cfg(test)]
+use limits::nesting_depth;
+use limits::{check_fragment, check_text, clip, set_failed};
 
 /// Check that YAML text parses and, when `schema` is given, that it
 /// satisfies that JSON Schema.
@@ -357,44 +458,14 @@ pub fn validate_with_profile(
     schema: Option<&str>,
     profile: ParseProfile,
 ) -> Result<ValidateOutput, String> {
-    let value = match noyalib::from_str_with_config::<noyalib::Value>(yaml, &profile.config()) {
+    let value = match parse_for_validation(yaml, &profile.config()) {
         Ok(v) => v,
-        Err(e) => {
-            let (line, column) = e.location().map_or((0, 0), |l| (l.line(), l.column()));
-            return Ok(ValidateOutput {
-                valid: false,
-                error: Some(e.to_string()),
-                line: Some(line),
-                column: Some(column),
-                violations: Vec::new(),
-            });
-        }
+        Err(verdict) => return Ok(verdict),
     };
-    let Some(schema_text) = schema else {
-        return Ok(ValidateOutput {
-            valid: true,
-            error: None,
-            line: None,
-            column: None,
-            violations: Vec::new(),
-        });
+    let violations = match schema {
+        Some(schema_text) => schema_violations(&value, schema_text)?,
+        None => Vec::new(),
     };
-    let schema: JsonValue =
-        serde_json::from_str(schema_text).map_err(|e| format!("schema is not JSON: {e}"))?;
-    let schema_value: noyalib::Value =
-        serde_json::from_value(schema).map_err(|e| format!("schema: {e}"))?;
-    let compiled =
-        noyalib::CompiledSchema::compile(&schema_value).map_err(|e| format!("schema: {e}"))?;
-    let violations: Vec<Violation> = compiled
-        .iter_errors(&value)
-        .map_err(internal)?
-        .iter()
-        .map(|v| Violation {
-            path: v.instance_path.clone(),
-            keyword: v.keyword.clone(),
-            message: v.message.clone(),
-        })
-        .collect();
     Ok(ValidateOutput {
         valid: violations.is_empty(),
         error: None,
@@ -404,6 +475,80 @@ pub fn validate_with_profile(
     })
 }
 
+/// The document `noyalib_validate` checks, or the verdict that it does
+/// not parse.
+fn parse_for_validation(
+    yaml: &str,
+    config: &noyalib::ParserConfig,
+) -> Result<noyalib::Value, ValidateOutput> {
+    let failed = |error: String, line, column| ValidateOutput {
+        valid: false,
+        error: Some(error),
+        line: Some(line),
+        column: Some(column),
+        violations: Vec::new(),
+    };
+    check_text(yaml, config).map_err(|e| failed(e, 0, 0))?;
+    noyalib::from_str_with_config::<noyalib::Value>(yaml, config).map_err(|e| {
+        let (line, column) = e.location().map_or((0, 0), |l| (l.line(), l.column()));
+        failed(e.to_string(), line, column)
+    })
+}
+
+/// The largest JSON Schema `noyalib_validate` compiles, in bytes.
+pub const MAX_SCHEMA_BYTES: usize = 64 * 1024;
+
+/// How many violations a verdict lists. Past it, one more entry says
+/// the list was cut short. The core stops collecting one past this cap,
+/// so a verdict never costs more than `MAX_VIOLATIONS + 1` violations.
+pub const MAX_VIOLATIONS: usize = 100;
+
+/// Compile a client's JSON Schema, refusing one over
+/// [`MAX_SCHEMA_BYTES`] before it is parsed.
+fn compile_schema(schema_text: &str) -> Result<noyalib::CompiledSchema, String> {
+    if schema_text.len() > MAX_SCHEMA_BYTES {
+        return Err(format!(
+            "the schema is {} bytes, over the {MAX_SCHEMA_BYTES}-byte schema limit",
+            schema_text.len()
+        ));
+    }
+    let schema: JsonValue =
+        serde_json::from_str(schema_text).map_err(|e| format!("schema is not JSON: {e}"))?;
+    let schema_value: noyalib::Value =
+        serde_json::from_value(schema).map_err(|e| format!("schema: {e}"))?;
+    noyalib::CompiledSchema::builder(&schema_value)
+        .max_errors(MAX_VIOLATIONS + 1)
+        .build()
+        .map_err(|e| format!("schema: {e}"))
+}
+
+/// The violations of the JSON Schema `schema_text` by `value`: the
+/// first [`MAX_VIOLATIONS`] of them with their messages clipped, and a
+/// `truncated` entry when there were more.
+fn schema_violations(value: &noyalib::Value, schema_text: &str) -> Result<Vec<Violation>, String> {
+    let compiled = compile_schema(schema_text)?;
+    let all = compiled.iter_errors(value).map_err(internal)?;
+    let mut violations: Vec<Violation> = all
+        .iter()
+        .take(MAX_VIOLATIONS)
+        .map(|v| Violation {
+            path: clip(&v.instance_path).into_owned(),
+            keyword: v.keyword.clone(),
+            message: clip(&v.message).into_owned(),
+        })
+        .collect();
+    if all.len() > MAX_VIOLATIONS {
+        violations.push(Violation {
+            path: String::new(),
+            keyword: "truncated".to_owned(),
+            message: format!(
+                "more than {MAX_VIOLATIONS} violations; the first {MAX_VIOLATIONS} are listed"
+            ),
+        });
+    }
+    Ok(violations)
+}
+
 /// An error no request can provoke (a JSON conversion of a value the
 /// parser already accepted): one function, so the unreachable paths do
 /// not each count as an uncovered closure.
@@ -411,36 +556,42 @@ fn internal(e: impl fmt::Display) -> String {
     format!("internal: {e}")
 }
 
-/// Write `bytes` to `file` atomically: write to a sibling temp
-/// file, fsync it, then `rename` over the target. The rename is
-/// atomic on POSIX and `MoveFileExW(MOVEFILE_REPLACE_EXISTING |
-/// MOVEFILE_WRITE_THROUGH)` semantics on Windows, so concurrent
-/// readers always see either the old or the new contents -- never
-/// a half-written truncation. The fsync also closes a Windows
-/// race where `fs::write` returned before the kernel page cache
-/// flushed, leaving a freshly-spawned reader to observe the old
-/// bytes.
-fn write_atomic(file: &str, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    use std::path::Path;
-    let target = Path::new(file);
-    let parent = target.parent().unwrap_or(Path::new("."));
-    let stem = target
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("noyalib-set");
-    let pid = std::process::id();
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let tmp = parent.join(format!(".{stem}.{pid}.{nanos}.tmp"));
-    {
-        let mut f = fs::File::create(&tmp)?;
-        f.write_all(bytes)?;
-        f.sync_all()?;
+/// Find a `file` argument under the server root.
+pub(crate) fn locate(root: &RootDir, file: &str) -> Result<Located, String> {
+    root.locate(Path::new(file)).map_err(|e| match e {
+        FileError::Outside => outside(file),
+        FileError::Io(e) => format!("read {file}: {e}"),
+    })
+}
+
+/// The one answer for a path outside the root, whatever is there.
+pub(crate) fn outside(file: &str) -> String {
+    format!("{file} is outside the server root; start noyalib-mcp with --root to allow it")
+}
+
+/// How long one tool call may run before the client is answered with
+/// an error. See [`YamlServer::with_call_timeout`].
+pub const DEFAULT_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Run a tool's work on the blocking pool, off the async workers, and
+/// answer with an error if it outlasts `limit`.
+///
+/// File I/O and parsing block. On a worker thread a slow call would
+/// stall every other request on that worker, `ping` included. A call
+/// past its time limit is answered at once; its thread cannot be
+/// interrupted and finishes in the background, its result discarded.
+async fn off_thread<T, F>(limit: std::time::Duration, work: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    match tokio::time::timeout(limit, tokio::task::spawn_blocking(work)).await {
+        Ok(joined) => joined.unwrap_or_else(|e| Err(internal(e))),
+        Err(_) => Err(format!(
+            "the call ran past the {} ms time limit and was abandoned",
+            limit.as_millis()
+        )),
     }
-    fs::rename(&tmp, target)
 }
 
 // --- Arguments -----------------------------------------------------------
@@ -598,15 +749,16 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<GetOutput>()
     )]
-    fn noyalib_get(
+    async fn noyalib_get(
         &self,
         Parameters(args): Parameters<GetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(
-            self.confine(&args.file)
-                .and_then(|f| get(&f.to_string_lossy(), &args.path)),
-            |_| false,
-        )
+        let (root, config) = (self.root.clone(), self.profile.config());
+        let outcome = off_thread(self.call_timeout, move || {
+            let at = locate(&root, &args.file)?;
+            get_at(&at, &args.file, &args.path, &config)
+        });
+        reply(outcome.await, |_| false)
     }
 
     #[tool(
@@ -633,20 +785,16 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<SetOutput>()
     )]
-    fn noyalib_set(
+    async fn noyalib_set(
         &self,
         Parameters(args): Parameters<SetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(
-            self.confine(&args.file)
-                .and_then(|f| set(&f.to_string_lossy(), &args.path, &args.value))
-                // Echo the path as the client wrote it, not the resolved one.
-                .map(|mut out| {
-                    out.file.clone_from(&args.file);
-                    out
-                }),
-            |_| false,
-        )
+        let (root, config) = (self.root.clone(), self.profile.config());
+        let outcome = off_thread(self.call_timeout, move || {
+            let at = locate(&root, &args.file)?;
+            set_at(&at, &args.file, &args.path, &args.value, &config)
+        });
+        reply(outcome.await, |_| false)
     }
 
     #[tool(
@@ -669,27 +817,22 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<SetMultidocOutput>()
     )]
-    fn noyalib_set_multidoc(
+    async fn noyalib_set_multidoc(
         &self,
         Parameters(args): Parameters<SetMultidocArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(
-            self.confine(&args.file)
-                .and_then(|f| {
-                    set_multidoc(
-                        &f.to_string_lossy(),
-                        args.doc_index,
-                        &args.path,
-                        &args.value,
-                    )
-                })
-                // Echo the path as the client wrote it, not the resolved one.
-                .map(|mut out| {
-                    out.file.clone_from(&args.file);
-                    out
-                }),
-            |_| false,
-        )
+        let (root, config) = (self.root.clone(), self.profile.config());
+        let outcome = off_thread(self.call_timeout, move || {
+            let at = locate(&root, &args.file)?;
+            let SetMultidocArgs {
+                file,
+                doc_index,
+                path,
+                value,
+            } = &args;
+            set_multidoc_at(&at, file, *doc_index, path, value, &config)
+        });
+        reply(outcome.await, |_| false)
     }
 
     #[tool(
@@ -713,11 +856,15 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<ParseOutput>()
     )]
-    fn noyalib_parse(
+    async fn noyalib_parse(
         &self,
         Parameters(args): Parameters<ParseArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(parse_with_profile(&args.yaml, self.profile()), |_| false)
+        let profile = self.profile();
+        let outcome = off_thread(self.call_timeout, move || {
+            parse_with_profile(&args.yaml, profile)
+        });
+        reply(outcome.await, |_| false)
     }
 
     #[tool(
@@ -737,11 +884,15 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<EditOutput>()
     )]
-    fn noyalib_edit(
+    async fn noyalib_edit(
         &self,
         Parameters(args): Parameters<EditArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        reply(edit(&args.yaml, &args.path, &args.value), |_| false)
+        let profile = self.profile();
+        let outcome = off_thread(self.call_timeout, move || {
+            edit_with_profile(&args.yaml, &args.path, &args.value, profile)
+        });
+        reply(outcome.await, |_| false)
     }
 
     #[tool(
@@ -761,535 +912,20 @@ impl YamlServer {
         ),
         output_schema = schema_for_output::<ValidateOutput>()
     )]
-    fn noyalib_validate(
+    async fn noyalib_validate(
         &self,
         Parameters(args): Parameters<ValidateArgs>,
     ) -> Result<CallToolResult, ErrorData> {
+        let profile = self.profile();
+        let outcome = off_thread(self.call_timeout, move || {
+            validate_with_profile(&args.yaml, args.schema.as_deref(), profile)
+        });
         // An invalid document is a failure the model must see, so it
         // is flagged `isError` -- but it is also a complete verdict, so
         // the structured half is kept.
-        reply(
-            validate_with_profile(&args.yaml, args.schema.as_deref(), self.profile()),
-            |v| !v.valid,
-        )
+        reply(outcome.await, |v| !v.valid)
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU32, Ordering};
-
-    /// Allocate a unique scratch path under the system temp dir so
-    /// parallel test runs don't collide.
-    fn temp_path(label: &str) -> PathBuf {
-        static COUNTER: AtomicU32 = AtomicU32::new(0);
-        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let pid = std::process::id();
-        std::env::temp_dir().join(format!("noyalib-mcp-{label}-{pid}-{id}.yml"))
-    }
-
-    fn write_temp(label: &str, contents: &str) -> PathBuf {
-        let p = temp_path(label);
-        fs::write(&p, contents).unwrap();
-        p
-    }
-
-    /// Call a tool the way a request reaches it: JSON arguments,
-    /// deserialised into the tool's parameter type.
-    fn args<T: serde::de::DeserializeOwned>(v: JsonValue) -> Parameters<T> {
-        Parameters(serde_json::from_value(v).expect("arguments"))
-    }
-
-    fn call(tool: &str, v: JsonValue) -> CallToolResult {
-        // The fixtures are written under the system temp directory, so
-        // that is the root the file tools are confined to here.
-        let server = YamlServer::with_root(std::env::temp_dir());
-        match tool {
-            "noyalib_get" => server.noyalib_get(args(v)),
-            "noyalib_set" => server.noyalib_set(args(v)),
-            "noyalib_set_multidoc" => server.noyalib_set_multidoc(args(v)),
-            "noyalib_parse" => server.noyalib_parse(args(v)),
-            "noyalib_edit" => server.noyalib_edit(args(v)),
-            "noyalib_validate" => server.noyalib_validate(args(v)),
-            other => panic!("no such tool {other}"),
-        }
-        .expect("a tool failure is a result, not a protocol error")
-    }
-
-    fn text_of(r: &CallToolResult) -> &str {
-        r.content
-            .first()
-            .and_then(ContentBlock::as_text)
-            .map(|t| t.text.as_str())
-            .expect("text content")
-    }
-
-    fn is_error(r: &CallToolResult) -> bool {
-        r.is_error == Some(true)
-    }
-
-    // ── the catalogue ──────────────────────────────────────────────
-
-    #[test]
-    fn every_tool_is_registered_with_schemas_and_annotations() {
-        let tools = YamlServer::tool_router().list_all();
-        let mut names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
-        names.sort_unstable();
-        let mut want = TOOL_NAMES;
-        want.sort_unstable();
-        assert_eq!(names, want);
-        for t in &tools {
-            assert!(t.description.is_some(), "{} has no description", t.name);
-            assert!(t.title.is_some(), "{} has no title", t.name);
-            assert_eq!(
-                t.input_schema.get("type").and_then(JsonValue::as_str),
-                Some("object")
-            );
-            assert!(
-                t.input_schema
-                    .get("required")
-                    .is_some_and(JsonValue::is_array)
-            );
-            assert!(t.output_schema.is_some(), "{} has no outputSchema", t.name);
-            let a = t.annotations.as_ref().expect("annotations");
-            assert!(a.read_only_hint.is_some(), "{} lacks readOnlyHint", t.name);
-            // Every argument carries an example, so an auditor with no
-            // file of its own can still make a well-formed call.
-            let props = t.input_schema["properties"]
-                .as_object()
-                .expect("properties");
-            for (name, schema) in props {
-                assert!(
-                    schema.get("examples").is_some_and(JsonValue::is_array),
-                    "{}.{name} has no example: {schema}",
-                    t.name
-                );
-                assert!(schema.get("description").is_some(), "{}.{name}", t.name);
-            }
-        }
-    }
-
-    #[test]
-    fn input_schemas_keep_the_field_names_and_descriptions() {
-        let tools = YamlServer::tool_router().list_all();
-        let get = tools.iter().find(|t| t.name == "noyalib_get").expect("get");
-        let props = &get.input_schema["properties"];
-        assert_eq!(
-            props["file"]["description"].as_str(),
-            Some("Path to the YAML file on disk.")
-        );
-        assert_eq!(get.input_schema["required"], json!(["file", "path"]));
-        let multidoc = tools
-            .iter()
-            .find(|t| t.name == "noyalib_set_multidoc")
-            .expect("multidoc");
-        assert_eq!(
-            multidoc.input_schema["properties"]["doc_index"]["type"],
-            "integer"
-        );
-        assert_eq!(
-            multidoc.input_schema["required"],
-            json!(["file", "doc_index", "path", "value"])
-        );
-        let validate = tools
-            .iter()
-            .find(|t| t.name == "noyalib_validate")
-            .expect("validate");
-        assert_eq!(validate.input_schema["required"], json!(["yaml"]));
-        let write: Vec<&str> = tools
-            .iter()
-            .filter(|t| t.annotations.as_ref().and_then(|a| a.read_only_hint) == Some(false))
-            .map(|t| t.name.as_ref())
-            .collect();
-        assert_eq!(write, ["noyalib_set", "noyalib_set_multidoc"]);
-    }
-
-    // ── get ────────────────────────────────────────────────────────
-
-    #[test]
-    fn get_reads_the_source_slice() {
-        let p = write_temp("call-get", "name: noyalib\n");
-        let r = call(
-            "noyalib_get",
-            json!({ "file": p.to_str().unwrap(), "path": "name" }),
-        );
-        assert!(!is_error(&r));
-        assert_eq!(text_of(&r), "noyalib");
-        assert_eq!(r.structured_content, Some(json!({"value": "noyalib"})));
-        let _ = fs::remove_file(&p);
-    }
-
-    #[test]
-    fn get_of_an_empty_value_is_the_empty_slice_not_an_error() {
-        // yaml-test-suite 7W2P: `? a` / `c:` are present keys with an
-        // implicit null value. They must not read as "path not found".
-        let p = write_temp("call-get-empty", "a:\nb: 1\nc:\n");
-        for key in ["a", "c"] {
-            let r = call(
-                "noyalib_get",
-                json!({ "file": p.to_str().unwrap(), "path": key }),
-            );
-            assert!(!is_error(&r));
-            assert_eq!(text_of(&r), "");
-        }
-        let r = call(
-            "noyalib_get",
-            json!({ "file": p.to_str().unwrap(), "path": "missing" }),
-        );
-        assert!(is_error(&r));
-        assert!(text_of(&r).contains("path not found"), "{}", text_of(&r));
-        assert!(r.structured_content.is_none());
-        let _ = fs::remove_file(&p);
-    }
-
-    #[test]
-    fn get_reports_every_failure_as_text() {
-        let err = get("/this/path/definitely/does/not/exist.yml", "k").unwrap_err();
-        assert!(err.starts_with("read "), "{err}");
-        let p = write_temp("get-parse", "key: [\n");
-        let err = get(p.to_str().unwrap(), "key").unwrap_err();
-        assert!(err.starts_with("parse "), "{err}");
-        let _ = fs::remove_file(&p);
-    }
-
-    // ── set ────────────────────────────────────────────────────────
-
-    #[test]
-    fn set_rewrites_only_the_touched_span() {
-        let p = write_temp("call-set", "# keep\nversion: 1 # inline\n");
-        let r = call(
-            "noyalib_set",
-            json!({ "file": p.to_str().unwrap(), "path": "version", "value": "2" }),
-        );
-        assert!(!is_error(&r), "{r:?}");
-        assert!(text_of(&r).contains("set version = 2"), "{}", text_of(&r));
-        assert_eq!(
-            r.structured_content,
-            Some(json!({"file": p.to_str().unwrap(), "path": "version", "value": "2"}))
-        );
-        assert_eq!(
-            fs::read_to_string(&p).unwrap(),
-            "# keep\nversion: 2 # inline\n"
-        );
-        let _ = fs::remove_file(&p);
-    }
-
-    #[test]
-    fn set_reports_every_failure_and_leaves_the_file_alone() {
-        let err = set("/this/path/does/not/exist.yml", "k", "v").unwrap_err();
-        assert!(err.starts_with("read "), "{err}");
-
-        let p = write_temp("set-parse", "k: [\n");
-        let err = set(p.to_str().unwrap(), "k", "v").unwrap_err();
-        assert!(err.starts_with("parse "), "{err}");
-        assert_eq!(fs::read_to_string(&p).unwrap(), "k: [\n");
-        let _ = fs::remove_file(&p);
-
-        let p = write_temp("set-bad-path", "a: 1\n");
-        let err = set(p.to_str().unwrap(), "missing.path", "v").unwrap_err();
-        assert!(err.starts_with("set missing.path = v"), "{err}");
-        assert_eq!(fs::read_to_string(&p).unwrap(), "a: 1\n");
-        let _ = fs::remove_file(&p);
-    }
-
-    // ── set_multidoc ───────────────────────────────────────────────
-
-    #[test]
-    fn set_multidoc_changes_one_document_only() {
-        let p = write_temp("call-set-multidoc", "name: first\n---\nname: second\n");
-        let r = call(
-            "noyalib_set_multidoc",
-            json!({
-                "file": p.to_str().unwrap(),
-                "doc_index": 1,
-                "path": "name",
-                "value": "changed"
-            }),
-        );
-        assert!(!is_error(&r), "{r:?}");
-        assert!(text_of(&r).contains("document 1"), "{}", text_of(&r));
-        assert_eq!(
-            r.structured_content
-                .as_ref()
-                .and_then(|s| s.get("doc_index")),
-            Some(&json!(1))
-        );
-        assert_eq!(
-            fs::read_to_string(&p).unwrap(),
-            "name: first\n---\nname: changed\n"
-        );
-        let _ = fs::remove_file(&p);
-    }
-
-    #[test]
-    fn set_multidoc_reports_every_failure_and_leaves_the_file_alone() {
-        let err = set_multidoc("/this/path/does/not/exist.yml", 0, "a", "1").unwrap_err();
-        assert!(err.starts_with("read "), "{err}");
-
-        let p = write_temp("md-oob", "a: 1\n---\nb: 2\n");
-        let err = set_multidoc(p.to_str().unwrap(), 9, "b", "3").unwrap_err();
-        assert!(err.contains("out of range"), "{err}");
-        assert!(err.contains("2 document(s)"), "{err}");
-        let err = set_multidoc(p.to_str().unwrap(), 0, "missing.deep", "1").unwrap_err();
-        assert!(err.starts_with("set missing.deep = 1"), "{err}");
-        assert_eq!(fs::read_to_string(&p).unwrap(), "a: 1\n---\nb: 2\n");
-        let _ = fs::remove_file(&p);
-
-        let p = write_temp("md-parse", "a: [\n");
-        let err = set_multidoc(p.to_str().unwrap(), 0, "a", "1").unwrap_err();
-        assert!(err.starts_with("parse "), "{err}");
-        let _ = fs::remove_file(&p);
-    }
-
-    // ── parse ──────────────────────────────────────────────────────
-
-    #[test]
-    fn parse_is_stateless_and_returns_the_json_model() {
-        let r = call(
-            "noyalib_parse",
-            json!({ "yaml": "a: 0x2A\nb: !custom x\nc:\n" }),
-        );
-        assert!(!is_error(&r));
-        let parsed: JsonValue = serde_json::from_str(text_of(&r)).unwrap();
-        assert_eq!(parsed, json!({"a": 42, "b": "x", "c": null}));
-        assert_eq!(
-            r.structured_content,
-            Some(json!({"documents": [{"a": 42, "b": "x", "c": null}]}))
-        );
-        let bad = call("noyalib_parse", json!({ "yaml": "a: [\n" }));
-        assert!(is_error(&bad));
-        assert!(text_of(&bad).starts_with("parse: "), "{}", text_of(&bad));
-    }
-
-    #[test]
-    fn parse_returns_an_array_for_a_stream() {
-        let r = call("noyalib_parse", json!({ "yaml": "--- 1\n--- 2\n" }));
-        let parsed: JsonValue = serde_json::from_str(text_of(&r)).unwrap();
-        assert_eq!(parsed, json!([1, 2]));
-        assert_eq!(r.structured_content, Some(json!({"documents": [1, 2]})));
-    }
-
-    // ── edit ───────────────────────────────────────────────────────
-
-    #[test]
-    fn edit_returns_the_whole_text_with_one_span_changed() {
-        let r = call(
-            "noyalib_edit",
-            json!({ "yaml": "# keep\nversion: 0.0.34 # inline\nname: x\n", "path": "version", "value": "0.0.35" }),
-        );
-        assert!(!is_error(&r));
-        assert_eq!(text_of(&r), "# keep\nversion: 0.0.35 # inline\nname: x\n");
-        assert_eq!(
-            r.structured_content,
-            Some(json!({"yaml": "# keep\nversion: 0.0.35 # inline\nname: x\n"}))
-        );
-    }
-
-    #[test]
-    fn edit_reports_every_failure_as_text() {
-        let r = call(
-            "noyalib_edit",
-            json!({ "yaml": "a: [\n", "path": "a", "value": "1" }),
-        );
-        assert!(is_error(&r));
-        assert!(text_of(&r).starts_with("parse: "), "{}", text_of(&r));
-        let r = call(
-            "noyalib_edit",
-            json!({ "yaml": "a: 1\n", "path": "missing.key", "value": "1" }),
-        );
-        assert!(is_error(&r));
-        assert!(
-            text_of(&r).starts_with("set missing.key = 1"),
-            "{}",
-            text_of(&r)
-        );
-    }
-
-    // ── validate ───────────────────────────────────────────────────
-
-    #[test]
-    fn validate_reports_parse_errors_and_schema_violations() {
-        let r = call("noyalib_validate", json!({ "yaml": "a: [\n" }));
-        assert!(
-            is_error(&r),
-            "an invalid document is a failure the model must see"
-        );
-        let v: JsonValue = serde_json::from_str(text_of(&r)).unwrap();
-        assert_eq!(v["valid"], false);
-        assert!(v["error"].as_str().unwrap().len() > 3);
-        assert!(v["line"].is_u64());
-        // A verdict is a complete result even when it is a failure.
-        assert_eq!(r.structured_content, Some(v));
-
-        let schema = r#"{"type":"object","properties":{"port":{"type":"integer","maximum":65535}},"required":["port"]}"#;
-        let r = call(
-            "noyalib_validate",
-            json!({ "yaml": "port: 70000\n", "schema": schema }),
-        );
-        assert!(is_error(&r));
-        let v: JsonValue = serde_json::from_str(text_of(&r)).unwrap();
-        assert_eq!(v["valid"], false);
-        assert!(v["error"].is_null());
-        let violations = v["violations"].as_array().unwrap();
-        assert!(!violations.is_empty());
-        assert!(violations[0]["path"].as_str().unwrap().contains("port"));
-        assert!(violations[0]["keyword"].is_string());
-
-        let r = call(
-            "noyalib_validate",
-            json!({ "yaml": "port: 8080\n", "schema": schema }),
-        );
-        assert!(!is_error(&r), "{r:?}");
-        assert_eq!(
-            r.structured_content,
-            Some(json!({"valid": true, "violations": []}))
-        );
-
-        let r = call("noyalib_validate", json!({ "yaml": "a: 1\n" }));
-        assert!(!is_error(&r));
-        assert_eq!(text_of(&r), r#"{"valid":true,"violations":[]}"#);
-    }
-
-    #[test]
-    fn validate_refuses_a_schema_it_cannot_use() {
-        let r = call(
-            "noyalib_validate",
-            json!({ "yaml": "a: 1\n", "schema": "{not json" }),
-        );
-        assert!(is_error(&r));
-        assert!(
-            text_of(&r).starts_with("schema is not JSON"),
-            "{}",
-            text_of(&r)
-        );
-        assert!(r.structured_content.is_none());
-        let r = call(
-            "noyalib_validate",
-            json!({ "yaml": "a: 1\n", "schema": "{\"type\": 12}" }),
-        );
-        assert!(is_error(&r));
-        assert!(text_of(&r).starts_with("schema: "), "{}", text_of(&r));
-    }
-
-    #[test]
-    fn outputs_print_what_the_model_reads() {
-        let out = SetOutput {
-            file: "f.yml".into(),
-            path: "a".into(),
-            value: "1".into(),
-        };
-        assert_eq!(
-            out.to_string(),
-            "set a = 1 in f.yml (lossless: comments and formatting preserved)"
-        );
-        let out = ParseOutput {
-            documents: vec![json!({"a": 1})],
-        };
-        assert_eq!(out.to_string(), "{\n  \"a\": 1\n}");
-        assert_eq!(internal("boom"), "internal: boom");
-    }
-
-    // ── root confinement ─────────────────────────────────────────────
-
-    #[test]
-    fn a_file_outside_the_root_is_refused_before_it_is_read() {
-        let inside = std::env::temp_dir().join(format!("noyalib-mcp-root-{}", std::process::id()));
-        fs::create_dir_all(&inside).unwrap();
-        let outside = write_temp("outside", "a: 1\n");
-        let server = YamlServer::with_root(inside.clone());
-        let r = server
-            .noyalib_get(args(
-                json!({"file": outside.to_str().unwrap(), "path": "a"}),
-            ))
-            .unwrap();
-        assert_eq!(r.is_error, Some(true));
-        let msg = text_of(&r);
-        assert!(msg.contains("outside the server root"), "{msg}");
-        assert!(msg.contains("--root"), "{msg}");
-        let _ = fs::remove_dir_all(inside);
-        let _ = fs::remove_file(outside);
-    }
-
-    #[test]
-    fn a_relative_path_resolves_against_the_root() {
-        let root = std::env::temp_dir().join(format!("noyalib-mcp-rel-{}", std::process::id()));
-        fs::create_dir_all(&root).unwrap();
-        fs::write(root.join("c.yml"), "k: v\n").unwrap();
-        let server = YamlServer::with_root(root.clone());
-        let r = server
-            .noyalib_get(args(json!({"file": "c.yml", "path": "k"})))
-            .unwrap();
-        assert_ne!(r.is_error, Some(true), "{}", text_of(&r));
-        assert!(text_of(&r).contains('v'));
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_symlink_that_escapes_the_root_is_refused() {
-        let root = std::env::temp_dir().join(format!("noyalib-mcp-sym-{}", std::process::id()));
-        fs::create_dir_all(&root).unwrap();
-        let target = write_temp("symtarget", "a: 1\n");
-        std::os::unix::fs::symlink(&target, root.join("link.yml")).unwrap();
-        let server = YamlServer::with_root(root.clone());
-        let r = server
-            .noyalib_set(args(json!({"file": "link.yml", "path": "a", "value": "2"})))
-            .unwrap();
-        assert_eq!(r.is_error, Some(true));
-        assert!(
-            text_of(&r).contains("outside the server root"),
-            "{}",
-            text_of(&r)
-        );
-        assert_eq!(
-            fs::read_to_string(&target).unwrap(),
-            "a: 1\n",
-            "the target must be untouched"
-        );
-        let _ = fs::remove_dir_all(root);
-        let _ = fs::remove_file(target);
-    }
-
-    // ── parse profile ────────────────────────────────────────────────
-
-    #[test]
-    fn parse_rejects_a_duplicate_key_by_default() {
-        let err = parse("a: 1\na: 2\n").unwrap_err();
-        assert!(err.to_lowercase().contains("duplicate"), "{err}");
-    }
-
-    #[test]
-    fn the_standard_profile_keeps_last_wins() {
-        let out = parse_with_profile("a: 1\na: 2\n", ParseProfile::Standard).unwrap();
-        assert_eq!(out.documents, vec![json!({"a": 2})]);
-    }
-
-    #[test]
-    fn validate_reports_a_duplicate_key_as_invalid_by_default() {
-        let out = validate("a: 1\na: 2\n", None).unwrap();
-        assert!(!out.valid);
-        assert!(out.error.unwrap().to_lowercase().contains("duplicate"));
-        assert!(
-            validate_with_profile("a: 1\na: 2\n", None, ParseProfile::Standard)
-                .unwrap()
-                .valid
-        );
-    }
-
-    #[test]
-    fn profile_names_round_trip() {
-        assert_eq!(
-            ParseProfile::from_name("strict"),
-            Some(ParseProfile::Strict)
-        );
-        assert_eq!(
-            ParseProfile::from_name("standard"),
-            Some(ParseProfile::Standard)
-        );
-        assert_eq!(ParseProfile::from_name("lax"), None);
-        assert_eq!(ParseProfile::default(), ParseProfile::Strict);
-    }
-}
+mod tests;

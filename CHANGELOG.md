@@ -11,6 +11,103 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
+## [v0.0.55] - 2026-10-08
+
+### Changed
+
+- Tracks `noyalib` 0.0.55 under the exact lockstep pin.
+- `noyalib_validate` asks the core for one violation past its cap of
+  100 and no longer counts the rest, so a hostile document costs at
+  most 101 violations. The `truncated` entry now reads "more than 100
+  violations" instead of giving the total.
+
+### Fixed
+
+- `--transport sse` now refuses a request whose `Host` is not one the
+  server answers to or whose `Origin` is not local (403), and a posted
+  message that is not `application/json` (415). A web page that rebound
+  its name to 127.0.0.1 could open the stream and call every tool.
+  Streamable HTTP also refuses a non-local `Origin` now.
+- `noyalib_set` and `noyalib_set_multidoc` keep the file's permission
+  bits (and owner, where the process may set it). A 0600 file was left
+  0644 and an executable lost its execute bits.
+- The replacement file is created exclusively under a random name, so a
+  file or symlink planted at the temp name is never opened. The old
+  name was predictable and a planted symlink redirected the write.
+- The file tools walk every path from an open handle on the root, one
+  component at a time without following symlinks implicitly, and read
+  and write relative to the directory the walk ends in. A directory
+  swapped for a symlink between the root check and the open could
+  redirect a read or a write outside the root. A symlink inside the
+  root still works; one that leaves it is refused.
+- A path outside the root draws one message, whether it exists, is
+  missing or is unreadable, and no message names the absolute root.
+- Paths are no longer converted to strings and back, so a non-UTF-8
+  name cannot be reopened as a different, lossy look-alike.
+- The file tools read only regular files no larger than the profile's
+  document limit (1 MiB strict, 64 MiB standard), checked before
+  reading, and do their file I/O on the blocking pool. A FIFO read per
+  worker thread wedged the whole server, `ping` included, and a 4 GiB
+  file was read into memory before any limit applied.
+- `noyalib_set`, `noyalib_set_multidoc` and `noyalib_edit` refuse a
+  replacement value over 256 KiB or nesting deeper than the profile's
+  `max_depth`, counted before the value is parsed. One request with a
+  100,000-deep `[[[...]]]` value overflowed the stack and killed the
+  server.
+- `noyalib_parse`, `noyalib_edit` and `noyalib_validate` refuse YAML
+  text over the profile's document limit before parsing it, with the
+  same message for all three.
+- Error messages repeat at most 120 bytes of a client's path or value
+  and give its length; a refused 40 KB value was echoed in full.
+- The stateless tools run on the blocking pool too.
+- `noyalib_validate` refuses a schema over 64 KiB before compiling it,
+  lists at most 100 violations (and then says how many there were)
+  with each message clipped, and every tool call that runs past 30
+  seconds is answered with an error instead of holding the client.
+- Without `--root`, the server refuses to start (exit 2) when its
+  working directory is the filesystem root or the home directory. A
+  client that spawns it from `/` gave the file tools the whole disk.
+- The HTTP transports hold at most 64 sessions at once (`--max-sessions`
+  sets it). A client could open sessions faster than they expire:
+  20,000 were accepted. A session restored from a session store counts
+  against the same limit.
+- The `format_and_lint_yaml` prompt escapes its `file` argument
+  (backticks, backslashes, control characters) and cuts it at 256
+  characters, so it stays one quoted name instead of adding lines to
+  the text the model reads as the user's.
+- `SECURITY.md` described a stdio-only server that "never opens
+  listening sockets" and caps message length before deserialising,
+  neither of which was true. It now states the trust model as the code
+  implements it: stdio by default, HTTP opt-in on loopback with its
+  `Host`/`Origin` checks and no authentication, root confinement and
+  its limits (hard links, JSON files), and every size and time cap.
+- The npm wrapper runs nothing it cannot verify. It reads the archive
+  name and the SHA-256 of the archive and of the binary from a
+  `digests.json` inside the npm package, checks the archive before
+  unpacking it and the binary after, re-checks the cached binary before
+  every run, downloads over https only and follows redirects only to
+  GitHub's release hosts (at most five). Without a digest for the
+  platform it downloads nothing and names `cargo install` and the
+  container instead. Before, it ran whatever the download produced and
+  a cached binary unchecked, and the asset it asked for was never
+  published, so it could not work for anyone.
+
+### Changed (behaviour)
+
+- `--profile` now applies to the CST tools too: `noyalib_get`,
+  `noyalib_set`, `noyalib_set_multidoc` and `noyalib_edit` parse under
+  the profile's rules and limits. Under the default strict profile a
+  file with duplicate keys or odd indentation is refused where it was
+  read last-wins before; `--profile standard` restores that.
+
+### Added
+
+- `edit_with_profile`, the `noyalib_edit` counterpart of
+  `parse_with_profile`, `YamlServer::with_call_timeout`, and the
+  constants `MAX_FRAGMENT_BYTES`, `MAX_SCHEMA_BYTES`, `MAX_VIOLATIONS`
+  and `DEFAULT_CALL_TIMEOUT`.
+- `--max-sessions <n>` for the HTTP transports.
+
 ## [v0.0.54] - 2026-10-07
 
 ### Added

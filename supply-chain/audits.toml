@@ -243,8 +243,20 @@ user-id = 55123 # rust-lang-owner
 start = "2024-10-26"
 end = "2027-05-09"
 
+[[trusted.linux-raw-sys]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-06-12"
+end = "2027-05-09"
+
 [[trusted.referencing]]
 criteria = "safe-to-deploy"
 user-id = 82692 # Dmitry Dygalo (Stranger6667)
 start = "2024-09-29"
 end = "2027-09-17"
+
+[[trusted.rustix]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-10-29"
+end = "2027-05-09"

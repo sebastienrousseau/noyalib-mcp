@@ -1,126 +1,262 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2026 Noyalib. All rights reserved.
 
-// Download + cache resolver for the npm wrapper. Maps node's
-// (process.platform, process.arch) tuple to the matching tarball
-// name under the GitHub Release for this package version.
+// Download, verify and cache the `noyalib-mcp` binary for this
+// platform. Fails closed: nothing is executed unless its SHA-256
+// matches `digests.json`, which ships inside this npm package (and so
+// is covered by its provenance attestation).
+//
+// digests.json, written by the release workflow:
+//
+//   {
+//     "version": "0.0.55",
+//     "targets": {
+//       "x86_64-unknown-linux-musl": {
+//         "archive": "noyalib-mcp-0.0.55-x86_64-unknown-linux-musl.tar.gz",
+//         "archive_sha256": "<64 hex>",
+//         "binary_sha256": "<64 hex>"
+//       }
+//     }
+//   }
+//
+// The archive is checked before it is unpacked, the binary after, and
+// the cached binary again before every run.
 
 "use strict";
 
+const crypto    = require("node:crypto");
 const fs        = require("node:fs");
 const fsp       = require("node:fs/promises");
 const path      = require("node:path");
 const os        = require("node:os");
 const https     = require("node:https");
-const { pipeline } = require("node:stream/promises");
-const zlib      = require("node:zlib");
-const { spawn } = require("node:child_process");
+const { spawnSync } = require("node:child_process");
 
 const PKG = require("./package.json");
 
-// Maps Node's runtime identifiers to Rust target triples used in
-// the GitHub Release artefact filenames.
+const REPO = "sebastienrousseau/noyalib-mcp";
+
+// Hosts a release download may be served from: the release URL itself
+// and the hosts GitHub redirects release assets to.
+const ALLOWED_HOSTS = new Set([
+    "github.com",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+]);
+const MAX_REDIRECTS = 5;
+const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024;
+
+// Node's runtime identifiers to the Rust target triples of the
+// release archives.
 const TARGET_TABLE = {
     "linux-x64":     "x86_64-unknown-linux-musl",
     "linux-arm64":   "aarch64-unknown-linux-musl",
-    "linux-arm":     "armv7-unknown-linux-gnueabihf",
     "darwin-x64":    "x86_64-apple-darwin",
     "darwin-arm64":  "aarch64-apple-darwin",
     "win32-x64":     "x86_64-pc-windows-msvc",
-    "win32-arm64":   "aarch64-pc-windows-msvc",
 };
+
+function alternatives(version) {
+    return "Install it another way instead:\n"
+        + `  cargo install noyalib-mcp --version ${version} --locked\n`
+        + `  docker run -i --rm ghcr.io/${REPO}:${version}`;
+}
 
 function targetTriple(platform, arch) {
     const key = `${platform}-${arch}`;
     const triple = TARGET_TABLE[key];
     if (!triple) {
-        throw new Error(`unsupported platform: ${key}`);
+        throw new Error(`no prebuilt binary for ${key}.\n${alternatives(PKG.version)}`);
     }
     return triple;
 }
 
-function cacheDir(version) {
-    return path.join(os.homedir(), ".cache", "noyalib-mcp", version);
+function cacheDir(version, root = path.join(os.homedir(), ".cache", "noyalib-mcp")) {
+    return path.join(root, version);
 }
 
-async function exists(p) {
+function sha256(buffer) {
+    return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+// The digest entry for `triple`, or an error that says what to do.
+function loadEntry(digests, version, triple) {
+    const entry = digests && digests.version === version && digests.targets
+        ? digests.targets[triple]
+        : undefined;
+    const hex = /^[0-9a-f]{64}$/;
+    if (!entry || !hex.test(entry.archive_sha256 || "") || !hex.test(entry.binary_sha256 || "")
+        || typeof entry.archive !== "string" || !/^[\w.-]+$/.test(entry.archive)) {
+        throw new Error(
+            `this package carries no verified digest for ${triple} at ${version}, `
+            + `so it will not download or run a binary.\n${alternatives(version)}`,
+        );
+    }
+    return entry;
+}
+
+function readDigests(file = path.join(__dirname, "digests.json")) {
     try {
-        await fsp.access(p, fs.constants.X_OK);
-        return true;
+        return JSON.parse(fs.readFileSync(file, "utf8"));
     } catch {
-        return false;
+        return undefined;
     }
 }
 
-function fetch(url) {
+// Refuse any URL that is not https on a GitHub release host.
+function checkUrl(url) {
+    const u = new URL(url);
+    if (u.protocol !== "https:" || !ALLOWED_HOSTS.has(u.hostname)) {
+        throw new Error(`refusing to download from ${u.protocol}//${u.hostname}`);
+    }
+    return u;
+}
+
+// GET `url` into memory, following at most MAX_REDIRECTS redirects,
+// each to an allowed host.
+function fetchBuffer(url, redirects = 0) {
     return new Promise((resolve, reject) => {
-        const req = https.get(url, { headers: { "user-agent": `noyalib-mcp-npm/${PKG.version}` } }, (res) => {
-            if (res.statusCode === 302 || res.statusCode === 301) {
-                resolve(fetch(res.headers.location));
+        let u;
+        try {
+            u = checkUrl(url);
+        } catch (e) {
+            reject(e);
+            return;
+        }
+        const headers = { "user-agent": `noyalib-mcp-npm/${PKG.version}` };
+        const req = https.get(u, { headers }, (res) => {
+            const status = res.statusCode ?? 500;
+            if (status >= 300 && status < 400 && res.headers.location) {
+                res.resume();
+                if (redirects >= MAX_REDIRECTS) {
+                    reject(new Error(`too many redirects for ${url}`));
+                    return;
+                }
+                const next = new URL(res.headers.location, u).toString();
+                resolve(fetchBuffer(next, redirects + 1));
                 return;
             }
-            if ((res.statusCode ?? 500) >= 400) {
-                reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+            if (status >= 400) {
+                res.resume();
+                reject(new Error(`HTTP ${status} for ${url}`));
                 return;
             }
-            resolve(res);
+            const chunks = [];
+            let size = 0;
+            res.on("data", (chunk) => {
+                size += chunk.length;
+                if (size > MAX_ARCHIVE_BYTES) {
+                    req.destroy(new Error(`download larger than ${MAX_ARCHIVE_BYTES} bytes`));
+                    return;
+                }
+                chunks.push(chunk);
+            });
+            res.on("end", () => resolve(Buffer.concat(chunks)));
+            res.on("error", reject);
         });
         req.on("error", reject);
     });
 }
 
-async function downloadOrCached(platform, arch) {
-    const triple = targetTriple(platform, arch);
-    const ext    = platform === "win32" ? ".exe" : "";
-    const dir    = cacheDir(PKG.version);
-    const binary = path.join(dir, `noyalib-mcp${ext}`);
+function releaseUrl(version, archive) {
+    return `https://github.com/${REPO}/releases/download/v${version}/${archive}`;
+}
 
-    if (await exists(binary)) {
-        return binary;
+// The cached binary, if present: verified, or an error. `undefined`
+// when there is nothing cached.
+async function verifiedCached(binary, entry) {
+    let bytes;
+    try {
+        bytes = await fsp.readFile(binary);
+    } catch {
+        return undefined;
     }
-
-    await fsp.mkdir(dir, { recursive: true });
-
-    const archiveExt = platform === "win32" ? "zip" : "tar.gz";
-    const archive    = `noyalib-${PKG.version}-${triple}.${archiveExt}`;
-    const url        = `https://github.com/sebastienrousseau/noyalib-mcp/releases/download/v${PKG.version}/${archive}`;
-
-    process.stderr.write(`noyalib-mcp: fetching ${url} (first run only) …\n`);
-
-    if (archiveExt === "tar.gz") {
-        const res = await fetch(url);
-        const tar = spawn("tar", ["-xzf", "-", "-C", dir, "--strip-components=1"], {
-            stdio: ["pipe", "inherit", "inherit"],
-        });
-        await pipeline(res, tar.stdin);
-        await new Promise((resolve, reject) => {
-            tar.on("exit", (code) =>
-                code === 0 ? resolve() : reject(new Error(`tar exited ${code}`)),
-            );
-        });
-    } else {
-        // Windows .zip path — defer to PowerShell's Expand-Archive
-        // since Node's stdlib doesn't include a zip extractor and we
-        // do not want to add a runtime dependency.
-        const tmpZip = path.join(dir, archive);
-        const res = await fetch(url);
-        await pipeline(res, fs.createWriteStream(tmpZip));
-        const ps = spawn("powershell.exe", [
-            "-NoProfile", "-Command",
-            `Expand-Archive -Path "${tmpZip}" -DestinationPath "${dir}" -Force`,
-        ], { stdio: "inherit" });
-        await new Promise((resolve, reject) => {
-            ps.on("exit", (code) =>
-                code === 0 ? resolve() : reject(new Error(`Expand-Archive exited ${code}`)),
-            );
-        });
-        await fsp.unlink(tmpZip);
-    }
-
-    if (!(await exists(binary))) {
-        throw new Error(`extracted archive does not contain expected binary: ${binary}`);
+    if (sha256(bytes) !== entry.binary_sha256) {
+        throw new Error(
+            `the cached binary ${binary} does not match its published digest; `
+            + "it will not be run. Delete it to download a fresh copy.",
+        );
     }
     return binary;
 }
 
-module.exports = { downloadOrCached, targetTriple, cacheDir };
+// Unpack a verified archive into a fresh staging directory beside the
+// cache, check the binary, and move it into place.
+async function install(archiveBytes, entry, dir, binaryName) {
+    const staging = await fsp.mkdtemp(path.join(dir, ".staging-"));
+    try {
+        const archivePath = path.join(staging, entry.archive);
+        await fsp.writeFile(archivePath, archiveBytes, { mode: 0o600 });
+        // bsdtar (macOS, Windows 10+) and GNU tar both unpack .tar.gz;
+        // bsdtar also unpacks .zip.
+        const tar = spawnSync("tar", ["-xf", archivePath, "-C", staging], { stdio: "inherit" });
+        if (tar.status !== 0) {
+            throw new Error(`tar exited ${tar.status}`);
+        }
+        const found = await findFile(staging, binaryName);
+        if (!found) {
+            throw new Error(`the archive does not contain ${binaryName}`);
+        }
+        if (sha256(await fsp.readFile(found)) !== entry.binary_sha256) {
+            throw new Error("the unpacked binary does not match its published digest");
+        }
+        await fsp.chmod(found, 0o755);
+        const binary = path.join(dir, binaryName);
+        await fsp.rename(found, binary);
+        return binary;
+    } finally {
+        await fsp.rm(staging, { recursive: true, force: true });
+    }
+}
+
+async function findFile(dir, name) {
+    for (const item of await fsp.readdir(dir, { withFileTypes: true })) {
+        const full = path.join(dir, item.name);
+        if (item.isFile() && item.name === name) {
+            return full;
+        }
+        if (item.isDirectory()) {
+            const inner = await findFile(full, name);
+            if (inner) {
+                return inner;
+            }
+        }
+    }
+    return undefined;
+}
+
+// The path of a verified binary for this platform, downloading it on
+// first use. `options` exists for tests: { digests, cacheRoot, fetch }.
+async function downloadOrCached(platform, arch, options = {}) {
+    const version = PKG.version;
+    const triple = targetTriple(platform, arch);
+    const digests = "digests" in options ? options.digests : readDigests();
+    const entry = loadEntry(digests, version, triple);
+    const dir = cacheDir(version, options.cacheRoot);
+    const binaryName = platform === "win32" ? "noyalib-mcp.exe" : "noyalib-mcp";
+    const binary = path.join(dir, binaryName);
+
+    const cached = await verifiedCached(binary, entry);
+    if (cached) {
+        return cached;
+    }
+
+    await fsp.mkdir(dir, { recursive: true, mode: 0o700 });
+    const url = releaseUrl(version, entry.archive);
+    process.stderr.write(`noyalib-mcp: fetching ${url} (first run only)\n`);
+    const archiveBytes = await (options.fetch || fetchBuffer)(url);
+    if (sha256(archiveBytes) !== entry.archive_sha256) {
+        throw new Error(`${entry.archive} does not match its published SHA-256; refusing to unpack it`);
+    }
+    return install(archiveBytes, entry, dir, binaryName);
+}
+
+module.exports = {
+    downloadOrCached,
+    targetTriple,
+    cacheDir,
+    checkUrl,
+    loadEntry,
+    verifiedCached,
+    sha256,
+};
