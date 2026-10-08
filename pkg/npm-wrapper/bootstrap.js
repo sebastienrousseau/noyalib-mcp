@@ -9,10 +9,10 @@
 // digests.json, written by the release workflow:
 //
 //   {
-//     "version": "0.0.55",
+//     "version": "0.0.56",
 //     "targets": {
 //       "x86_64-unknown-linux-musl": {
-//         "archive": "noyalib-mcp-0.0.55-x86_64-unknown-linux-musl.tar.gz",
+//         "archive": "noyalib-mcp-0.0.56-x86_64-unknown-linux-musl.tar.gz",
 //         "archive_sha256": "<64 hex>",
 //         "binary_sha256": "<64 hex>"
 //       }
