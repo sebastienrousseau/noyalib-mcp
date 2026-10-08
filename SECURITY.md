@@ -181,7 +181,7 @@ cosign verify-blob \
 
 The GHCR image and its MCP Registry entry come only from
 `release.yml` (the separate `publish-mcp.yml`, which pushed unsigned
-images first, was removed in v0.0.56). Verify the image by digest or
+images first, was removed in v0.0.55). Verify the image by digest or
 tag:
 
 ```sh
