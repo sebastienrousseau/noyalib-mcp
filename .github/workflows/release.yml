@@ -656,7 +656,9 @@ jobs:
             const file = path.join(dir, archive);
             if (!fs.existsSync(file)) throw new Error(`no release archive for ${t}: ${archive}`);
             const work = fs.mkdtempSync(path.join(os.tmpdir(), "digest-"));
-            execFileSync("tar", ["-xf", file, "-C", work]);
+            // GNU tar on the runner cannot read a .zip; use unzip for those.
+            if (zip) execFileSync("unzip", ["-q", file, "-d", work]);
+            else execFileSync("tar", ["-xf", file, "-C", work]);
             const bin = find(work, zip ? "noyalib-mcp.exe" : "noyalib-mcp");
             if (!bin) throw new Error(`${archive} holds no binary`);
             targets[t] = { archive, archive_sha256: sha(fs.readFileSync(file)), binary_sha256: sha(fs.readFileSync(bin)) };
