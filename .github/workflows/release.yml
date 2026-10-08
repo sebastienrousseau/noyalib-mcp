@@ -635,37 +635,7 @@ jobs:
         working-directory: pkg/npm-wrapper
         run: |
           set -euo pipefail
-          node - "${GITHUB_REF_NAME#v}" "$GITHUB_WORKSPACE/npm-binaries" <<'EOF'
-          const fs = require("node:fs"), path = require("node:path"), os = require("node:os");
-          const crypto = require("node:crypto"), { execFileSync } = require("node:child_process");
-          const [version, dir] = process.argv.slice(2);
-          const src = fs.readFileSync("bootstrap.js", "utf8");
-          const triples = [...src.matchAll(/"[a-z0-9]+-[a-z0-9]+":\s+"([^"]+)"/g)].map((m) => m[1]);
-          const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
-          const find = (d, n) => {
-            for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-              const f = path.join(d, e.name);
-              if (e.isFile() && e.name === n) return f;
-              if (e.isDirectory()) { const r = find(f, n); if (r) return r; }
-            }
-          };
-          const targets = {};
-          for (const t of triples) {
-            const zip = t.includes("windows");
-            const archive = `noyalib-mcp-${version}-${t}.${zip ? "zip" : "tar.gz"}`;
-            const file = path.join(dir, archive);
-            if (!fs.existsSync(file)) throw new Error(`no release archive for ${t}: ${archive}`);
-            const work = fs.mkdtempSync(path.join(os.tmpdir(), "digest-"));
-            // GNU tar on the runner cannot read a .zip; use unzip for those.
-            if (zip) execFileSync("unzip", ["-q", file, "-d", work]);
-            else execFileSync("tar", ["-xf", file, "-C", work]);
-            const bin = find(work, zip ? "noyalib-mcp.exe" : "noyalib-mcp");
-            if (!bin) throw new Error(`${archive} holds no binary`);
-            targets[t] = { archive, archive_sha256: sha(fs.readFileSync(file)), binary_sha256: sha(fs.readFileSync(bin)) };
-          }
-          fs.writeFileSync("digests.json", JSON.stringify({ version, targets }, null, 2) + "\n");
-          console.log(`digests.json: ${Object.keys(targets).length} targets`);
-          EOF
+          node scripts/write-digests.js "${GITHUB_REF_NAME#v}" "$GITHUB_WORKSPACE/npm-binaries"
           npm test
 
       - name: Publish (Trusted Publishing + provenance)

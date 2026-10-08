@@ -13,6 +13,16 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ## [v0.0.56] - Unreleased
 
+### Fixed
+
+- The npm wrapper publishes again. The v0.0.55 release built and
+  attached every per-target archive, but the step that writes the
+  wrapper's `digests.json` unpacked the Windows `.zip` with `tar`, which
+  the Linux runner cannot read, so `@sebastienrousseau/noyalib-mcp`
+  0.0.55 never reached npm. The step now uses `unzip` for it, lives in
+  `pkg/npm-wrapper/scripts/write-digests.js`, and is tested against real
+  `.tar.gz` and `.zip` archives for every target on each CI run.
+
 ### Changed
 
 - Tracks `noyalib` 0.0.56 under the exact lockstep pin.
