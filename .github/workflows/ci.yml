@@ -53,7 +53,23 @@ jobs:
     uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
 
   verify-signatures:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@139a826ba273b8f9feffff54795711f4df321928
+
+  # The npm wrapper runs nothing it cannot verify; its tests prove it.
+  npm-wrapper:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: npm test
+        working-directory: pkg/npm-wrapper
 
   test-matrix:
     # `noyalib-mcp` is a stdio-JSON-RPC server; the OS matrix runs
@@ -61,7 +77,7 @@ jobs:
     # the process-lifecycle + IPC surface differs materially across
     # host operating systems (line endings, path separators, signal
     # handling).
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@139a826ba273b8f9feffff54795711f4df321928
 
   # ── A+ rigor parity with the core (added v0.0.17) ──────────────────
   # The satellite previously ran only the lint/test/supply-chain gates.
@@ -70,7 +86,7 @@ jobs:
   coverage-gate:
     # mcp clears the core's 93/96/94 floor (measured 95.7/98.3/94.4).
     # No feature flags, so --all-features == default.
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-coverage.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-coverage.yml@139a826ba273b8f9feffff54795711f4df321928
     with:
       ignore-filename-regex: ''
       fail-under-functions: 96
@@ -95,10 +111,12 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target-fuzz
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
         with:
           toolchain: nightly
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: ". -> target-fuzz"
           key: fuzz-regression
@@ -116,3 +134,14 @@ jobs:
             echo "── replaying $t against: ${dirs[*]}"
             cargo +nightly fuzz run "$t" "${dirs[@]}" -- -runs=0
           done
+
+  # ── Workflow gates shared with the core (v0.0.55) ───────────────────
+  # actionlint: workflow files are well-formed (shellcheck included).
+  # zizmor: workflow security audit, failing at medium and above.
+  # single-publisher: only release.yml may publish anything.
+  actionlint:
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-actionlint.yml@139a826ba273b8f9feffff54795711f4df321928
+  zizmor:
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-zizmor.yml@139a826ba273b8f9feffff54795711f4df321928
+  single-publisher:
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-single-publisher.yml@139a826ba273b8f9feffff54795711f4df321928

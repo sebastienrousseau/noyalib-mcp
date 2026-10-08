@@ -31,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # SHA-pinned like release.yml. dtolnay/rust-toolchain reads the
       # toolchain from the ref name, so a SHA pin must name it explicitly.
@@ -38,7 +40,7 @@ jobs:
         with:
           toolchain: stable
 
-      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: ". -> target-mcp-inspect"
           key: mcp-inspect

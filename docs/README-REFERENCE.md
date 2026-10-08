@@ -243,7 +243,7 @@ attached to releases yet. To verify a release artefact:
 
 ```bash
 COSIGN_EXPERIMENTAL=1 cosign verify-blob \
-  --certificate-identity-regexp 'https://github.com/sebastienrousseau/noyalib-mcp/' \
+  --certificate-identity-regexp '^https://github\.com/sebastienrousseau/noyalib-mcp/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   --bundle <artefact>.bundle \
   <artefact>

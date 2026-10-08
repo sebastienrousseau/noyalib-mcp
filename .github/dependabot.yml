@@ -25,6 +25,8 @@ updates:
       # release tag, not Dependabot. See ADR-0005 (in
       # sebastienrousseau/noyalib) for the lockstep contract.
       - dependency-name: "noyalib"
+    cooldown:
+      default-days: 7
 
   # GitHub Actions — includes SHA bumps of the shared reusable
   # workflows consumed from sebastienrousseau/noyalib. A hardening
@@ -46,6 +48,8 @@ updates:
       github-actions:
         patterns:
           - "*"
+    cooldown:
+      default-days: 7
 
   # npm — for the pkg/npm-wrapper/ package. Weekly bumps of
   # wrapper deps only.
@@ -60,6 +64,8 @@ updates:
     labels:
       - "dependencies"
       - "npm"
+    cooldown:
+      default-days: 7
 
   # Docker — for pkg/docker/Dockerfile base image bumps.
   - package-ecosystem: "docker"
@@ -73,3 +79,5 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    cooldown:
+      default-days: 7
