@@ -10,8 +10,8 @@ iteration increments exactly 0.0.1.
 
 ## Minimum Rust version
 
-The minimum supported Rust version is 1.88.0 because the MCP SDK stack requires
-that floor. The manifest declares it and CI verifies it. A future increase is a
+The minimum supported Rust version is 1.89.0, the floor shared across the noyalib
+family; the MCP SDK stack alone requires 1.88.0. The manifest declares it and CI verifies it. A future increase is a
 breaking-axis change and requires a changelog entry.
 
 ## Protocol and transport stability

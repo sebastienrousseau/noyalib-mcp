@@ -11,6 +11,20 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
+## [v0.0.58] - Unreleased
+
+### Changed: MSRV 1.88 to 1.89
+
+- **The minimum supported Rust version is now 1.89.0** (was 1.88.0),
+  in lockstep with noyalib v0.0.58. The raise has no toolchain reason;
+  it puts the family on one floor with the maintainer's other Rust
+  crates (noyalib ADR-0014). If you are pinned below 1.89, stay on
+  v0.0.57. The MCP SDK alone needs 1.88.0, so this crate no longer
+  sits above the rest of the family.
+- **`scripts/verify-release-versions.sh` checks the MSRV.** Every
+  statement of the floor (README, policies, rustdoc, CI) must match
+  `rust-version`; each failed against the old statements.
+
 ## [v0.0.57] - 2026-10-09
 
 ### Changed

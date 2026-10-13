@@ -77,7 +77,7 @@ commands.
 
 ## Requirements
 
-- **Rust 1.88.0 or newer** to build from source: `rust-version` in
+- **Rust 1.89.0 or newer** to build from source: `rust-version` in
   the manifest, enforced by the `msrv-core` CI job on every push.
 - **Any tier-1 platform.** CI runs the tests on Linux, macOS, and
   Windows with the stable, beta, and nightly toolchains; stable is the
@@ -278,9 +278,8 @@ Full cookbook: [`pkg/VERIFY.md`](https://github.com/sebastienrousseau/noyalib/bl
 
 ## Compatibility
 
-**MSRV: Rust 1.88.0** stable, the lowest toolchain this crate can be
-**built and tested** on. The MCP SDK sets a higher floor than the
-`noyalib` core. We publish the number we verify. The MCP wire surface
+**MSRV: Rust 1.89.0** stable, the floor shared across the noyalib family and the
+maintainer's other Rust crates (noyalib ADR-0014). The MCP SDK alone needs 1.88.0. The MCP wire surface
 itself is text-only JSON-RPC and pulls no nightly-only dependencies.
 CI verifies the floor on every PR via the `msrv-core` workflow job.
 The bump policy lives in

@@ -19,7 +19,8 @@ cd noyalib-mcp
 cargo test
 ```
 
-MSRV is **Rust 1.88.0**, set by the MCP SDK and enforced in CI.
+MSRV is **Rust 1.89.0**, identical across the family and enforced in CI;
+the MCP SDK alone needs 1.88.0.
 
 ## Developing against an unpublished core
 
