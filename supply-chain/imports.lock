@@ -150,6 +150,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.tokio]]
+version = "1.53.2"
+when = "2026-10-03"
+user-id = 6741
+user-login = "Darksonn"
+user-name = "Alice Ryhl"
+
 [[publisher.unicode-xid]]
 version = "0.2.6"
 when = "2024-09-19"
