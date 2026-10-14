@@ -25,6 +25,11 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   statement of the floor (README, policies, rustdoc, CI) must match
   `rust-version`; each failed against the old statements.
 
+### Dependencies
+
+- tokio 1.53.2, from Dependabot #132. `cargo vet` needs the
+  maintainer's decision for it: `.git/vet-v0.0.58.sh` asks.
+
 ## [v0.0.57] - 2026-10-09
 
 ### Changed
