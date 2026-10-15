@@ -13,6 +13,12 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ## [v0.0.58] - Unreleased
 
+### Changed
+
+- Tracks `noyalib` 0.0.58 under the exact lockstep pin, so the core's
+  0.0.58 fixes reach this crate unchanged; the core's CHANGELOG lists
+  them.
+
 ### Changed: MSRV 1.88 to 1.89
 
 - **The minimum supported Rust version is now 1.89.0** (was 1.88.0),
@@ -27,8 +33,10 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ### Dependencies
 
-- tokio 1.53.2, from Dependabot #132. `cargo vet` needs the
-  maintainer's decision for it: `.git/vet-v0.0.58.sh` asks.
+- tokio 1.53.2, from Dependabot #132. The maintainer's cargo-vet
+  decision for it is recorded in `supply-chain/audits.toml`.
+- `dtolnay/rust-toolchain` moves to `e2a55d2` in CI, from Dependabot
+  #133.
 
 ## [v0.0.57] - 2026-10-09
 

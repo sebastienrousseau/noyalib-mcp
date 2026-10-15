@@ -64,7 +64,7 @@
 
 ```toml
 [dependencies]
-noyalib-mcp = "0.0.57"
+noyalib-mcp = "0.0.58"
 ```
 
 Install or run the server through the channel that fits the host:
@@ -83,7 +83,7 @@ the two commands above.
 
 - Rust **1.89.0 or newer** when building from source.
 - Linux, macOS, and Windows are tested by CI.
-- The crate pins `noyalib` at exactly `=0.0.57` under the lockstep contract.
+- The crate pins `noyalib` at exactly `=0.0.58` under the lockstep contract.
 - An MCP client is required to drive the server.
 
 | Surface | Minimum toolchain | Enforcement |
