@@ -4,14 +4,14 @@
 
 ## Version and dependency policy
 
-`noyalib-mcp` releases in strict lockstep with `noyalib`. Version 0.0.57 pins
-the core at exactly `=0.0.57`. Release work uses `feat/v0.0.57`; each subsequent
+`noyalib-mcp` releases in strict lockstep with `noyalib`. Version 0.0.58 pins
+the core at exactly `=0.0.58`. Release work uses `feat/v0.0.58`; each subsequent
 iteration increments exactly 0.0.1.
 
 ## Minimum Rust version
 
-The minimum supported Rust version is 1.88.0 because the MCP SDK stack requires
-that floor. The manifest declares it and CI verifies it. A future increase is a
+The minimum supported Rust version is 1.89.0, the floor shared across the noyalib
+family; the MCP SDK stack alone requires 1.88.0. The manifest declares it and CI verifies it. A future increase is a
 breaking-axis change and requires a changelog entry.
 
 ## Protocol and transport stability

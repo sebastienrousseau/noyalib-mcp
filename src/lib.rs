@@ -55,8 +55,11 @@
 //!
 //! # MSRV
 //!
-//! **Rust 1.88.0** stable, the floor of the SDK. The manifest's
-//! `rust-version` is the contract and CI verifies it.
+//! **Rust 1.89.0** stable, the floor shared across the noyalib
+//! family and the maintainer's other Rust crates (noyalib
+//! ADR-0014). The manifest's `rust-version` is the contract and
+//! the `msrv-core` CI job verifies it. The bump policy is in
+//! [`POLICIES.md`](https://github.com/sebastienrousseau/noyalib/blob/main/docs/POLICIES.md#1-msrv-minimum-supported-rust-version).
 //!
 //! # Panics
 //!

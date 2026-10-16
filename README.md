@@ -16,7 +16,7 @@
   <a href="https://docs.rs/noyalib-mcp"><img src="https://img.shields.io/badge/docs.rs-noyalib--mcp-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" alt="Docs" /></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/sebastienrousseau/noyalib-mcp"><img src="https://img.shields.io/ossf-scorecard/github.com/sebastienrousseau/noyalib-mcp?style=for-the-badge&label=OpenSSF%20Scorecard&logo=openssf" alt="OpenSSF Scorecard" /></a>
   <a href="LICENSE-APACHE"><img src="https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg?style=for-the-badge" alt="License: Apache-2.0 OR MIT" /></a>
-  <a href="https://github.com/sebastienrousseau/noyalib-mcp/blob/main/docs/POLICIES.md"><img src="https://img.shields.io/badge/MSRV-1.88.0-93450a.svg?style=for-the-badge&logo=rust" alt="MSRV 1.88.0" /></a>
+  <a href="https://github.com/sebastienrousseau/noyalib-mcp/blob/main/docs/POLICIES.md"><img src="https://img.shields.io/badge/MSRV-1.89.0-93450a.svg?style=for-the-badge&logo=rust" alt="MSRV 1.89.0" /></a>
   <a href="https://glama.ai/mcp/servers/sebastienrousseau/noyalib-mcp"><img src="https://glama.ai/mcp/servers/sebastienrousseau/noyalib-mcp/badges/score.svg" alt="Glama MCP server score" /></a>
 </p>
 
@@ -64,7 +64,7 @@
 
 ```toml
 [dependencies]
-noyalib-mcp = "0.0.57"
+noyalib-mcp = "0.0.58"
 ```
 
 Install or run the server through the channel that fits the host:
@@ -81,15 +81,15 @@ the two commands above.
 
 ## Requirements
 
-- Rust **1.88.0 or newer** when building from source.
+- Rust **1.89.0 or newer** when building from source.
 - Linux, macOS, and Windows are tested by CI.
-- The crate pins `noyalib` at exactly `=0.0.57` under the lockstep contract.
+- The crate pins `noyalib` at exactly `=0.0.58` under the lockstep contract.
 - An MCP client is required to drive the server.
 
 | Surface | Minimum toolchain | Enforcement |
 | :--- | :---: | :--- |
-| Server and library | Rust 1.88.0 | manifest and MSRV CI |
-| Complete test surface | Rust 1.88.0 | all-target CI |
+| Server and library | Rust 1.89.0 | manifest and MSRV CI |
+| Complete test surface | Rust 1.89.0 | all-target CI |
 
 ## Quick Start
 

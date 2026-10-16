@@ -72,7 +72,7 @@ For team-internal hosted use:
 
 ```dockerfile
 # Dockerfile
-FROM rust:1.88-slim AS build
+FROM rust:1.89-slim AS build
 WORKDIR /src
 COPY . .
 RUN cargo install --path . --locked
