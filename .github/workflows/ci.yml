@@ -31,29 +31,29 @@ concurrency:
 
 jobs:
   docs-lint:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-docs-lint.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-docs-lint.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
   readme-examples:
     # Every ```rust block in README.md compiles against this crate.
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-readme-examples.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-readme-examples.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
   yaml-test-suite:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-yaml-test-suite.yml@4b0b9f502073b73784c6b12b8eaa9cce8e808a11
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-yaml-test-suite.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
   cargo-deny:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-deny.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
 
   cargo-vet:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-vet.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-vet.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
 
   cargo-machete:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-cargo-machete.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
 
   reuse-lint:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-reuse.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
 
   docs-strict:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-rustdoc-strict.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
 
   verify-signatures:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@139a826ba273b8f9feffff54795711f4df321928
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-verify-signatures.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
 
   # The npm wrapper runs nothing it cannot verify; its tests prove it.
   npm-wrapper:
@@ -64,7 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           package-manager-cache: false
@@ -77,7 +77,7 @@ jobs:
     # the process-lifecycle + IPC surface differs materially across
     # host operating systems (line endings, path separators, signal
     # handling).
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@139a826ba273b8f9feffff54795711f4df321928
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-test-matrix.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
 
   # ── A+ rigor parity with the core (added v0.0.17) ──────────────────
   # The satellite previously ran only the lint/test/supply-chain gates.
@@ -86,7 +86,7 @@ jobs:
   coverage-gate:
     # mcp clears the core's 93/96/94 floor (measured 95.7/98.3/94.4).
     # No feature flags, so --all-features == default.
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-coverage.yml@139a826ba273b8f9feffff54795711f4df321928
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-coverage.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
     with:
       ignore-filename-regex: ''
       fail-under-functions: 96
@@ -96,7 +96,7 @@ jobs:
   msrv-core:
     # Verifies the declared 1.89.0 floor actually builds. It is the
     # family's shared floor; the MCP SDK alone needs 1.88.
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-msrv-core.yml@a1a2c8e4e48106dd099bc47e52680a9775d852be
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-msrv-core.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
     with:
       toolchain: "1.89.0"
 
@@ -113,7 +113,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: nightly
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -140,8 +140,8 @@ jobs:
   # zizmor: workflow security audit, failing at medium and above.
   # single-publisher: only release.yml may publish anything.
   actionlint:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-actionlint.yml@139a826ba273b8f9feffff54795711f4df321928
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-actionlint.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
   zizmor:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-zizmor.yml@139a826ba273b8f9feffff54795711f4df321928
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-zizmor.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
   single-publisher:
-    uses: sebastienrousseau/noyalib/.github/workflows/shared-single-publisher.yml@139a826ba273b8f9feffff54795711f4df321928
+    uses: sebastienrousseau/noyalib/.github/workflows/shared-single-publisher.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
