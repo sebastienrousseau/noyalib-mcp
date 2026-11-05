@@ -76,10 +76,6 @@ criteria = "safe-to-deploy"
 version = "1.2.61"
 criteria = "safe-to-deploy"
 
-[[exemptions.chacha20]]
-version = "0.10.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.chrono]]
 version = "0.4.45"
 criteria = "safe-to-deploy"
@@ -91,10 +87,6 @@ criteria = "safe-to-run"
 [[exemptions.clap_builder]]
 version = "4.6.0"
 criteria = "safe-to-run"
-
-[[exemptions.cpufeatures]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
 
 [[exemptions.criterion]]
 version = "0.8.2"
@@ -332,16 +324,8 @@ criteria = "safe-to-deploy"
 version = "5.2.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.r-efi]]
-version = "6.0.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.rand]]
 version = "0.10.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.rand_core]]
-version = "0.10.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.redox_syscall]]
@@ -365,11 +349,11 @@ version = "0.4.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.rmcp]]
-version = "3.5.0"
+version = "3.7.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rmcp-macros]]
-version = "3.5.1"
+version = "3.8.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.ryu]]
@@ -377,11 +361,11 @@ version = "1.0.23"
 criteria = "safe-to-deploy"
 
 [[exemptions.schemars]]
-version = "1.2.2"
+version = "1.2.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.schemars_derive]]
-version = "1.2.2"
+version = "1.2.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.scopeguard]]
@@ -393,7 +377,7 @@ version = "0.30.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.serde_json]]
-version = "1.0.151"
+version = "1.0.154"
 criteria = "safe-to-deploy"
 
 [[exemptions.serde_path_to_error]]
@@ -436,10 +420,6 @@ criteria = "safe-to-deploy"
 version = "3.0.3"
 criteria = "safe-to-deploy"
 
-[[exemptions.sync_wrapper]]
-version = "0.1.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.thiserror]]
 version = "2.0.17"
 criteria = "safe-to-deploy"
@@ -457,7 +437,7 @@ version = "0.1.19"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-util]]
-version = "0.7.19"
+version = "0.7.20"
 criteria = "safe-to-deploy"
 
 [[exemptions.tower]]
@@ -485,7 +465,7 @@ version = "1.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.uuid]]
-version = "1.26.1"
+version = "1.29.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.uuid-simd]]
