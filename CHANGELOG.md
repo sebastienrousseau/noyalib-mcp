@@ -23,6 +23,7 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 - Pin fuzz-workspace Tokio to patched 1.54.1 for RUSTSEC-2026-0386.
   The existing production Tokio version and reviewed SDK are retained.
 - Audit nested lockfiles and fuzz HTTP header guards.
+- Verify offline recovery and corrupted-cache refusal using the installed npm wrapper.
 
 ## [v0.0.60] - 2026-11-10
 

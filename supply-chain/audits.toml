@@ -158,6 +158,12 @@ criteria = "safe-to-deploy"
 delta = "0.0.59 -> 0.0.60"
 notes = "Authenticated published core archives and compared all Rust bytes and dependency/feature/target/MSRV declarations; unchanged. MCP Rust source is unchanged from verified published 0.0.59. Release metadata and exact core pin only. Core 0.0.60 archive SHA-256 c4f58e0d7f94aac1ff656e07a05512093b0a0f866f5778f94e84909f50fc3157. See supply-chain/reviews/v0.0.60.md."
 
+[[audits.noyalib]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.0.60 -> 0.0.61"
+notes = "Compared the signed v0.0.60 core source to v0.0.61: no runtime source, feature, dependency or target declaration changes. Registry identity still requires verification."
+
 [[audits.noyalib-mcp]]
 who = "OpenAI Codex"
 criteria = "safe-to-deploy"
@@ -187,6 +193,12 @@ who = "OpenAI Codex"
 criteria = "safe-to-deploy"
 delta = "0.0.59 -> 0.0.60"
 notes = "Reviewed unchanged MCP runtime Rust against verified published 0.0.59. Package/core-pin metadata advances to 0.0.60, npm license files are bundled, and Rustix 1.1.6 is selected in both locks under the existing trusted publisher. No feature/MSRV or ambient-capability change. Dependency reviews remain separate. See supply-chain/reviews/v0.0.60.md."
+
+[[audits.noyalib-mcp]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.0.60 -> 0.0.61"
+notes = "Reviewed the v0.0.60 to v0.0.61 source delta. See supply-chain/reviews/v0.0.61.md for the scope and pre-publication registry checks."
 
 [[audits.pin-project-lite]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"

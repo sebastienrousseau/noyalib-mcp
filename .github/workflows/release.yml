@@ -638,6 +638,27 @@ jobs:
           node scripts/write-digests.js "${GITHUB_REF_NAME#v}" "$GITHUB_WORKSPACE/npm-binaries"
           npm test
 
+      - name: Verify the installed wrapper and offline recovery
+        run: |
+          set -euo pipefail
+          scratch="$(mktemp -d "$RUNNER_TEMP/noyalib-wrapper.XXXXXX")"
+          version="${GITHUB_REF_NAME#v}"
+          archive="$scratch/sebastienrousseau-noyalib-mcp-$version.tgz"
+          npm pack --ignore-scripts --pack-destination "$scratch" ./pkg/npm-wrapper
+          printf '%s\n' '{"private":true}' > "$scratch/package.json"
+          npm install --prefix "$scratch" --offline --ignore-scripts --no-save "$archive"
+          node scripts/check-wrapper-recovery.js \
+            "$scratch/node_modules/@sebastienrousseau/noyalib-mcp" \
+            "$GITHUB_WORKSPACE/npm-binaries/noyalib-mcp-$version-x86_64-unknown-linux-musl.tar.gz" \
+            | tee "$RUNNER_TEMP/wrapper-recovery.json"
+
+      - name: Retain wrapper recovery evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: npm-wrapper-recovery
+          path: ${{ runner.temp }}/wrapper-recovery.json
+          if-no-files-found: error
+
       - name: Publish (Trusted Publishing + provenance)
         working-directory: pkg/npm-wrapper
         run: |
