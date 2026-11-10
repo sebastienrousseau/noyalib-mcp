@@ -11,6 +11,17 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
+## [v0.0.60] - 2026-11-10
+
+### Changed
+
+- Track published core `=0.0.60` and align all release metadata.
+- Retain the reviewed MCP SDK 3.9.0 and fixed registry const-oid 0.10.3.
+- Integrate Rustix 1.1.6 from Dependabot PR #148, retaining the existing
+  trusted publisher and feature set. Both production and fuzz locks move.
+- Bundle the declared MIT and Apache license files in the npm wrapper.
+- Preserve runtime Rust source, Cargo features, API and Rust 1.89.0 support.
+
 ## [v0.0.59] - 2026-11-10
 
 ### Changed
