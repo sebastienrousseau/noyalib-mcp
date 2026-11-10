@@ -37,6 +37,12 @@ who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.7.6 -> 1.1.0"
 
+[[audits.const-oid]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+version = "0.10.3"
+notes = "Full source review of the authenticated registry archive SHA-256 be95d4a884358a21a199689323c29e9256b4a1b315e22f183d155422041d3a9a. Runtime Rust matches the reviewed merged fix 399ec598b509a728eb13f4e82be0a2526137e81f; src/db.rs changes only a documentation link. Checked arithmetic rejects over-u32 arcs; encoder, buffer, transparent slice cast and iterator/constructor invariants reviewed. No build script or ambient I/O. No certificate is issued for unfixed 0.10.2. See supply-chain/reviews/const-oid-0.10.3.md."
+
 [[audits.crossbeam-deque]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
@@ -145,6 +151,12 @@ who = "OpenAI Codex"
 criteria = "safe-to-deploy"
 delta = "0.0.58 -> 0.0.59"
 notes = "Reviewed published archive SHA-256 8d99aeedb93b24d2416edd7de7946ddedce9942af917cbc78b0d9a9ecca83bad and full 0.0.58 source delta: bounded portable float helpers, budgeted source retention and validated atomic CST edits. Unsafe code remains forbidden; no new ambient capabilities. See supply-chain/reviews/v0.0.59.md for provenance and validation boundaries."
+
+[[audits.noyalib-mcp]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+version = "0.0.58"
+notes = "Full source review of authenticated published archive SHA-256 ef34eef8f605fb24f4f1fb5c86dd138e03fc7c3ca055cfa5a498732bcbf53c3a. All 17 Rust/build files match the reviewed current source. Reviewed capability-rooted Unix path walks, bounded regular-file reads and atomic replacements, parser/schema/fragment budgets, bounded prompt/resource handling, loopback-first transports, Host/Origin/JSON guards, session cleanup and caller-controlled HTTP exposure. Unsafe code forbidden; build script only configures coverage. Non-Unix canonicalization races and non-cancelling blocking work remain documented deployment limitations; dependencies require separate audits. See supply-chain/reviews/mcp-0.0.58.md."
 
 [[audits.noyalib-mcp]]
 who = "OpenAI Codex"

@@ -3,6 +3,10 @@
 
 # Exact source review for interim MCP builds
 
+Historical review: superseded by the authenticated registry 0.10.3 review.
+No interim tag or distribution was published; the temporary Git policy
+and override were removed before the normal release.
+
 Reviewed 2026-11-10. Git repository:
 <https://github.com/RustCrypto/formats.git>. Exact revision:
 `399ec598b509a728eb13f4e82be0a2526137e81f`, the merged upstream fix in

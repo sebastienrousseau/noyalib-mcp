@@ -62,10 +62,6 @@
 
 ### As a Rust library
 
-The v0.0.59 registry release is pending. The version below identifies that
-forthcoming release; interim builds use a signed prerelease tag and the
-reviewed Git fix. A source checkout builds with `cargo build --release --locked`.
-
 ```toml
 [dependencies]
 noyalib-mcp = "0.0.59"
