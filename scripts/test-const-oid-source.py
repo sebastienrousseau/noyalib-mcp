@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
-spec = importlib.util.spec_from_file_location("interim_source", ROOT / "scripts/verify-interim-source.py")
+spec = importlib.util.spec_from_file_location("const_oid_source", ROOT / "scripts/verify-const-oid-source.py")
 gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
 
@@ -29,12 +29,12 @@ class SourceVerification(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        for name in ["Cargo.toml", "fuzz/Cargo.toml", "tests/interim-oid/Cargo.toml", "Cargo.lock", "fuzz/Cargo.lock", "tests/interim-oid/Cargo.lock", "supply-chain/reviews/const-oid-interim.json"]:
+        for name in ["Cargo.toml", "fuzz/Cargo.toml", "tests/const-oid-regression/Cargo.toml", "Cargo.lock", "fuzz/Cargo.lock", "tests/const-oid-regression/Cargo.lock", "supply-chain/reviews/const-oid-0.10.3.json"]:
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, target)
         original = Path(self.package["manifest_path"]).parent
-        inventory = json.loads((ROOT / "supply-chain/reviews/const-oid-interim.json").read_text())
+        inventory = json.loads((ROOT / "supply-chain/reviews/const-oid-0.10.3.json").read_text())
         for name in inventory["reviewed_files"]:
             target = self.root / "dependency" / name
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -43,16 +43,16 @@ class SourceVerification(unittest.TestCase):
         self.metadata = json.dumps({"packages": [package]}).encode()
 
     def verify(self):
-        with patch.object(gate, "ROOT", self.root), patch.object(sys, "argv", ["verify-interim-source.py", "--check-only"]), patch.object(gate.subprocess, "check_output", return_value=self.metadata):
+        with patch.object(gate, "ROOT", self.root), patch.object(sys, "argv", ["verify-const-oid-source.py", "--check-only"]), patch.object(gate.subprocess, "check_output", return_value=self.metadata):
             gate.main()
 
     def test_reviewed_source_passes(self):
         self.verify()
 
-    def test_different_resolved_revision_fails(self):
+    def test_different_registry_checksum_fails(self):
         path = self.root / "fuzz/Cargo.lock"
-        path.write_text(path.read_text().replace(gate.REVISION, "0" * 40))
-        with self.assertRaisesRegex(SystemExit, "reviewed revision"):
+        path.write_text(path.read_text().replace(gate.CHECKSUM, "0" * 64))
+        with self.assertRaisesRegex(SystemExit, "reviewed registry version"):
             self.verify()
 
     def test_additional_git_dependency_fails(self):
@@ -74,7 +74,7 @@ class SourceVerification(unittest.TestCase):
 
     def test_unreviewed_override_fails(self):
         path = self.root / "Cargo.toml"
-        path.write_text(path.read_text().replace(gate.REVISION, "0" * 40))
+        path.write_text(path.read_text() + '\n[patch.crates-io]\nconst-oid = { path = "unexpected" }\n')
         with self.assertRaisesRegex(SystemExit, "unexpected patch"):
             self.verify()
 

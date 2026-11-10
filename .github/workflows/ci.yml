@@ -30,13 +30,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  interim-source:
-    name: Verify interim dependency source
+  const-oid-source:
+    name: Verify const-oid dependency source
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/target-interim-source
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target-const-oid-source
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,9 +44,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
-      - run: python3 scripts/verify-interim-source.py
-      - run: python3 scripts/test-interim-source.py
-      - run: ./scripts/verify-release-versions.sh "" --interim
+      - run: python3 scripts/verify-const-oid-source.py
+      - run: python3 scripts/test-const-oid-source.py
+      - run: ./scripts/verify-release-versions.sh
   docs-lint:
     uses: sebastienrousseau/noyalib/.github/workflows/shared-docs-lint.yml@7529f1b3557ec62be0ae6c3a1cd968863a0fbe28
   readme-examples:

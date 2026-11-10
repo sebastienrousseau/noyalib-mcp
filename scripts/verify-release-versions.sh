@@ -23,20 +23,11 @@ set -euo pipefail
 #   scripts/verify-release-versions.sh v0.0.29    # a leading v is accepted
 
 cd "$(cd "$(dirname -- "$0")/.." && pwd)"
-exec python3 - "${1:-}" "${2:-}" <<'PY'
-import json, pathlib, re, sys, subprocess
+exec python3 - "${1:-}" <<'PY'
+import json, pathlib, re, sys
 
 root = pathlib.Path.cwd()
 wanted = sys.argv[1].lstrip("v") if len(sys.argv) > 1 and sys.argv[1] else ""
-interim = len(sys.argv) > 2 and sys.argv[2] == "--interim"
-if len(sys.argv) > 2 and sys.argv[2] and not interim:
-    sys.exit("unknown version gate option")
-if interim:
-    if wanted and not re.fullmatch(r"\d+\.\d+\.\d+(?:-interim\.[1-9]\d*)?", wanted):
-        sys.exit("invalid interim version")
-    wanted = wanted.split("-interim.")[0]
-    subprocess.run([sys.executable, str(root / "scripts/verify-interim-source.py"), "--check-only"], check=True)
-
 
 GREEN, RED, DIM, OFF = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 failed = []
@@ -212,10 +203,10 @@ else:
 for extra in (root / "fuzz" / "Cargo.toml",):
     if extra.is_file():
         manifest_text += extra.read_text(encoding="utf-8")
-if "[patch.crates-io]" in manifest_text and not interim:
+if "[patch.crates-io]" in manifest_text:
     bad("Cargo.toml", "pre-release [patch.crates-io] present — remove it to cut a release")
 else:
-    ok("Cargo.toml", "verified interim Git source" if interim else "no pre-release [patch] section")
+    ok("Cargo.toml", "no pre-release [patch] section")
 
 # cargo-deny may allow the core's git source only while the pre-release
 # [patch] above resolves through it; a release allows none, so the
@@ -223,10 +214,10 @@ else:
 deny_toml = root / "deny.toml"
 if deny_toml.is_file():
     allow_git = re.search(r"^allow-git\s*=\s*\[(.*?)\]", deny_toml.read_text(encoding="utf-8"), re.M | re.S)
-    if allow_git and allow_git.group(1).strip() and not interim:
+    if allow_git and allow_git.group(1).strip():
         bad("deny.toml", "allow-git lists a git source; empty it with the [patch] to cut a release")
     else:
-        ok("deny.toml", "interim Git source verified" if interim else "no git source allowed")
+        ok("deny.toml", "no git source allowed")
 
 # CITATION.cff carries its own version field. The core's gate has
 # checked it since the v0.0.31 cycle; the satellites never gained the

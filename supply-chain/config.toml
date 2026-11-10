@@ -25,10 +25,6 @@ url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 [imports.zcash]
 url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/audits.toml"
 
-[policy."const-oid:0.10.2@git:399ec598b509a728eb13f4e82be0a2526137e81f"]
-audit-as-crates-io = false
-notes = "Exact Git source is reviewed and hash/regression gated by scripts/verify-interim-source.py. Cargo-vet cannot fully certify a Git revision without certifying its published base; registry 0.10.2 is intentionally uncertified. See docs/adr/0001-interim-const-oid.md. Applies only to this revision."
-
 [policy.noyalib-mcp]
 audit-as-crates-io = true
 

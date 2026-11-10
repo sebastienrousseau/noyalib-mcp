@@ -1,0 +1,20 @@
+{
+  "version": "0.10.3",
+  "archive_sha256": "be95d4a884358a21a199689323c29e9256b4a1b315e22f183d155422041d3a9a",
+  "vcs_revision": "3c35e972cd4bbaf72c947364fdb964f8f95c3e9a",
+  "upstream_pr": "https://github.com/RustCrypto/formats/pull/2412",
+  "reviewed_files": {
+    "Cargo.toml": "531c13c84fc19597d9ee110fdd1bd72f6e783b0954a540d7da17f16a2eaec443",
+    "README.md": "3c7340c13efec58e2cd06e5be3f09e2340e88e702db0aa50fce5ca9427385985",
+    "src/arcs.rs": "6e9d06346016c88333e82b506f8c9a0f4eae4627643735fe51ddd33732fe4964",
+    "src/buffer.rs": "48fe786c178f864d5f6cd81eb406b5cde68fc12294e11022649bd61a3f130c6f",
+    "src/checked.rs": "c28ccef9a95b0a20dfe2c6c710b55399fda53802bbb1f379a7112daf5daec1fa",
+    "src/db/generated.rs": "b882e80a58c5059ce88f0fe43851c9b8c78ddf7197d50dfefc20af64f849997d",
+    "src/db.rs": "f0559546b09c95d82b70cfdf4980e2e8da6a050cb5a75fda0041f21d1a620194",
+    "src/encoder.rs": "6e0fa355f4b3484a0b7b417f027648e5057a565a5b33408b0b6ba274e134e006",
+    "src/error.rs": "07d7f59e79ac0d1b6176f163ac8ff013db78b72103b7e35b41cc218e3f04ca1b",
+    "src/lib.rs": "75a1fd845a0da56368da0942d954f6954f9fbfd095a217faf604c3f2aa8431e8",
+    "src/parser.rs": "29b2c1897b9f76a3869279ec2e32a4ec5d7653279e3b3eaec958617f3156b426",
+    "src/traits.rs": "d830d76e65f4ec2e48a1a6b71b5ea59456d3d061e5b7294a8c5c6a90bf3715c1"
+  }
+}

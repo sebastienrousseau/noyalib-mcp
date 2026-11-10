@@ -3,7 +3,7 @@
 
 # ADR-0001: Interim MCP builds from reviewed const-oid Git source
 
-Status: Accepted for the temporary build path, 2026-11-10.
+Status: Superseded by the fixed registry dependency, 2026-11-10.
 
 ## Context
 
@@ -41,3 +41,11 @@ After a compatible fixed registry release exists, review its archive,
 remove the overrides, exact Git policy, Git allowlist and interim source
 check, update all affected locks, and rerun normal release gates. Preserve
 the immutable interim tags, provenance and public review evidence.
+
+## Outcome
+
+const-oid 0.10.3 was published on 2026-11-10 and its authenticated source
+contains the reviewed fix. No interim tag or release was published. The
+Git override, exact-revision policy and interim publisher were removed
+before the normal release, and a full 0.10.3 registry audit was recorded.
+Existing registry trust and exemptions remain unchanged.
