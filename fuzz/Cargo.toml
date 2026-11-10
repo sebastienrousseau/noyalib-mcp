@@ -13,6 +13,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+axum = { version = "0.8", default-features = false }
 
 [dependencies.noyalib-mcp]
 path = ".."
@@ -20,6 +21,13 @@ path = ".."
 [[bin]]
 name = "tools"
 path = "fuzz_targets/tools.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "http_headers"
+path = "fuzz_targets/http_headers.rs"
 test = false
 doc = false
 bench = false

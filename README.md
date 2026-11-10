@@ -58,13 +58,19 @@
 
 ---
 
+## Development version
+
+This branch prepares unreleased v0.0.61. Versioned Cargo examples describe
+that upcoming release; use a published version for registry installation
+until it ships. Local verification uses the sibling core source explicitly.
+
 ## Install
 
 ### As a Rust library
 
 ```toml
 [dependencies]
-noyalib-mcp = "0.0.60"
+noyalib-mcp = "0.0.61"
 ```
 
 Install or run the server through the channel that fits the host:

@@ -80,14 +80,11 @@
 //! requests are capped in size, nesting and time. Full posture:
 //! [`SECURITY.md`](https://github.com/sebastienrousseau/noyalib-mcp/blob/main/SECURITY.md).
 //!
-//! # API stability and SemVer
+//! # API stability and versioning
 //!
-//! Pre-1.0 (`0.0.x`): the MCP wire contract (tool names, input-schema
-//! shapes, the failure taxonomy) is **stable** within a 0.0.x line --
-//! bug fixes only. Adding a tool is allowed within a 0.0.x bump;
-//! removing or renaming one is held to a 0.x bump. The Rust surface is
-//! the six functions, their argument and output types, and
-//! [`YamlServer`].
+//! The family increments strictly by +0.0.1 in lockstep. Changes to
+//! parsing behavior, wire/output shapes or exported interfaces are breaking
+//! changes on that axis and must be documented under the family policy.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

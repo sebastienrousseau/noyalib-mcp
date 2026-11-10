@@ -11,6 +11,19 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
+## [v0.0.61] - Unreleased
+
+### Changed
+
+- Prepare the next lockstep version for the ecosystem assurance work.
+  Release dates and completed changes are recorded after verification.
+
+### Security
+
+- Pin fuzz-workspace Tokio to patched 1.54.1 for RUSTSEC-2026-0386.
+  The existing production Tokio version and reviewed SDK are retained.
+- Audit nested lockfiles and fuzz HTTP header guards.
+
 ## [v0.0.60] - 2026-11-10
 
 ### Changed
