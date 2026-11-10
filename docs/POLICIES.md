@@ -4,8 +4,8 @@
 
 ## Version and dependency policy
 
-`noyalib-mcp` releases in strict lockstep with `noyalib`. Version 0.0.58 pins
-the core at exactly `=0.0.58`. Release work uses `feat/v0.0.58`; each subsequent
+`noyalib-mcp` releases in strict lockstep with `noyalib`. Version 0.0.59 pins
+the core at exactly `=0.0.59`. Release work uses `feat/v0.0.59`; each subsequent
 iteration increments exactly 0.0.1.
 
 ## Minimum Rust version

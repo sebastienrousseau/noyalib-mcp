@@ -23,3 +23,6 @@ path = "fuzz_targets/tools.rs"
 test = false
 doc = false
 bench = false
+
+[patch.crates-io]
+const-oid = { git = "https://github.com/RustCrypto/formats.git", rev = "399ec598b509a728eb13f4e82be0a2526137e81f" }

@@ -11,6 +11,18 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
+## [v0.0.59] - Unreleased
+
+### Changed
+
+- Track published core `=0.0.59` and the reviewed MCP SDK 3.9.0.
+- Offer separately labeled interim binaries and a container using the exact
+  merged RustCrypto const-oid overflow fix. Crates.io, npm and MCP registry
+  publication remain pending a compatible upstream registry release.
+- Verify the interim Git source identity, reviewed file hashes and overflow
+  regressions alongside existing registry audits. Credit Jaideep Pyne for
+  the upstream fix in RustCrypto/formats#2412.
+
 ## [v0.0.58] - 2026-10-16
 
 ### Changed
