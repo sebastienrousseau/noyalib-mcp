@@ -27,6 +27,7 @@ path = [
     "supply-chain/audits.toml",
     "supply-chain/config.toml",
     "supply-chain/imports.lock",
+    "supply-chain/reviews/*.json",
     "server.json",
     "glama.json",
 ]

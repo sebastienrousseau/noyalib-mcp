@@ -1,0 +1,11 @@
+[package]
+name = "noyalib-mcp-interim-oid-check"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.89.0"
+publish = false
+
+[dependencies]
+const-oid = { git = "https://github.com/RustCrypto/formats.git", rev = "399ec598b509a728eb13f4e82be0a2526137e81f" }
+
+[workspace]

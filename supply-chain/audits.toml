@@ -11,6 +11,12 @@ who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "1.5.0 -> 1.5.1"
 
+[[audits.block-buffer]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.10.4 -> 0.12.1"
+notes = "Reviewed all changed unsafe buffering operations, initialized ranges, sealed block-size bounds, cursor validation, deserialization and panic/reset guards; no I/O. Upstream tests and symbolic-alignment Miri passed. Archive SHA-256 d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa. See supply-chain/reviews/v0.0.59.md."
+
 [[audits.cc]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
@@ -40,6 +46,18 @@ delta = "0.8.5 -> 0.8.7"
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.8.18 -> 0.8.22"
+
+[[audits.crypto-common]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.1.6 -> 0.2.2"
+notes = "Reviewed all trait, key/IV generation and hazmat API changes. Unsafe code forbidden; no ambient I/O; caller-owned RNG and errors are propagated. Archive SHA-256 ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453. See supply-chain/reviews/v0.0.59.md."
+
+[[audits.digest]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+version = "0.11.3"
+notes = "Full source review of safe-Rust digest traits, bounded block interfaces, buffer macros and emitted code; unsafe code forbidden and no ambient I/O. Dependency crates require separate evidence. Archive SHA-256 f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2. See supply-chain/reviews/v0.0.59.md."
 
 [[audits.either]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
@@ -71,6 +89,12 @@ who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.14.0 -> 0.14.2"
 
+[[audits.hybrid-array]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+version = "0.4.15"
+notes = "Full source review of representation/layout, sealed size contracts, initialized-prefix guards, panic cleanup, casts, checked split/chunk lengths and disjoint mutable views. Optional trait implementations preserve element bounds. Upstream tests and symbolic-alignment Miri passed. This is an independent safe-to-deploy review, not a remapping of upstream ub-risk criteria. Archive SHA-256 27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17. See supply-chain/reviews/v0.0.59.md."
+
 [[audits.indexmap]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
@@ -80,6 +104,18 @@ delta = "2.12.0 -> 2.14.0"
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.15 -> 1.0.18"
+
+[[audits.jsonschema-regex]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.58.5 -> 0.60.2"
+notes = "Reviewed complete ECMA character-class and whitespace translation delta: bounded UTF-8 character offsets, linear safe-Rust scans and fixed whitespace ranges; no new unsafe code or ambient capabilities. Archive SHA-256 107aeb6ff14b8deb5610096a8ce5c554ec89806b521147eaeb3cae05b07edb7a. See supply-chain/reviews/v0.0.59.md."
+
+[[audits.jsonschema-value]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.58.5 -> 0.60.2"
+notes = "Reviewed complete decimal-budget and object-comparison delta: checked/saturating exponent handling, bounded materialization and safe-Rust modular arithmetic. Build script unchanged; optional foreign bindings remain disabled in these consumers. Archive SHA-256 e281d6b177bb4834f2ffd6f92aa0443cffe29c996b251c8d94eb6f456186feba. See supply-chain/reviews/v0.0.59.md."
 
 [[audits.libc]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
@@ -104,6 +140,12 @@ criteria = "safe-to-deploy"
 delta = "0.0.49 -> 0.0.50"
 notes = "Reviewed backpressured async streams and per-document frame limits; Tokio tests, clippy, and strict docs passed."
 
+[[audits.noyalib]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.0.58 -> 0.0.59"
+notes = "Reviewed published archive SHA-256 8d99aeedb93b24d2416edd7de7946ddedce9942af917cbc78b0d9a9ecca83bad and full 0.0.58 source delta: bounded portable float helpers, budgeted source retention and validated atomic CST edits. Unsafe code remains forbidden; no new ambient capabilities. See supply-chain/reviews/v0.0.59.md for provenance and validation boundaries."
+
 [[audits.noyalib-mcp]]
 who = "OpenAI Codex"
 criteria = "safe-to-deploy"
@@ -115,6 +157,12 @@ who = "OpenAI Codex"
 criteria = "safe-to-deploy"
 delta = "0.0.49 -> 0.0.50"
 notes = "Reviewed lockstep release metadata; source and behaviour are unchanged."
+
+[[audits.noyalib-mcp]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.0.58 -> 0.0.59"
+notes = "Compared published 0.0.58 archive with this release: runtime Rust unchanged; serde-yaml changes only its crate-level version example. Release metadata, exact core pin and independently reviewed dependencies change. See supply-chain/reviews/v0.0.59.md."
 
 [[audits.pin-project-lite]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
@@ -156,6 +204,30 @@ who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.8.5 -> 0.8.11"
 
+[[audits.rmcp]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "3.5.1 -> 3.9.0"
+notes = "Reviewed complete SDK source delta, bounded HTTP/stdin buffering, OAuth resolved-address validation, same-origin redirects, session association, schema-cache removal and child cleanup. No new runtime unsafe block. 847 upstream security/unit tests passed. Caller-provided transports/proxies retain their trust boundary. Archive SHA-256 d24a7e92f4bcaa36b97fa93c4fa7ca8f3e669eced949345b3462dba333c7f909. See supply-chain/reviews/v0.0.59.md."
+
+[[audits.rmcp]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "3.7.0 -> 3.9.0"
+notes = "Authenticated the retained main baseline archive (SHA-256 ece64e19631fc38758181e637c15509a2c2709ee53bfde1e1d58f9dc991f919e). Reviewed the exact 3.7.0-to-3.9.0 delta against the prior complete 3.5.1-to-3.9.0 review. Only four added lines absent from the prior review occur in test session setup/cleanup; runtime additions are covered. Existing bounds, transport/session association and lock/drop invariants preserve the reviewed safety properties. Target SHA-256 d24a7e92f4bcaa36b97fa93c4fa7ca8f3e669eced949345b3462dba333c7f909. See supply-chain/reviews/const-oid-interim.md."
+
+[[audits.rmcp-macros]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "3.5.1 -> 3.9.0"
+notes = "All packaged Rust source is byte-identical to the reviewed base; changes are package metadata/changelog. No new generated code or capabilities. Archive SHA-256 b3140f24a766f80f9ec1607bde85680959a69b83d46fa9ce87dadab7e67ab029. See supply-chain/reviews/v0.0.59.md."
+
+[[audits.rmcp-macros]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "3.8.0 -> 3.9.0"
+notes = "Authenticated baseline archive SHA-256 8b0748e054a5f5598b3213cf72099ae6b2745ba4d996c59ccf455150a7dbb839. All packaged Rust source in 3.9.0 is byte-identical to 3.8.0. Only package metadata and changelog change; no new generated code or capabilities. See supply-chain/reviews/const-oid-interim.md."
+
 [[audits.rustc-hash]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
@@ -181,6 +253,12 @@ who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.228 -> 1.0.229"
 
+[[audits.sha2]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+delta = "0.10.9 -> 0.11.1"
+notes = "Reviewed hardware-dispatch feature guards, typed block lengths, SIMD pointer bounds and software schedule indexing. No ambient I/O or enabled build script. Native default and documented software-backend vectors passed; not every architecture/forced backend was executed and no formal cryptographic proof is claimed. Archive SHA-256 47d7069beb7d6ac7b9acd1039986e73443f24234f41074da099d6f994ac9ad19. See supply-chain/reviews/v0.0.59.md."
+
 [[audits.shlex]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
@@ -195,6 +273,12 @@ delta = "0.4.8 -> 0.4.12"
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "2.0.98 -> 2.0.119"
+
+[[audits.typenum]]
+who = "OpenAI Codex"
+criteria = "safe-to-deploy"
+version = "1.20.1"
+notes = "Full source review of type-level arithmetic, generated constants/mappings and safe-Rust implementations. Unsafe code forbidden; no enabled build script or ambient I/O. Full upstream tests passed on Rust 1.89 without lint suppression. Archive SHA-256 b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20. See supply-chain/reviews/v0.0.59.md."
 
 [[audits.unicode-ident]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
@@ -239,7 +323,7 @@ end = "2027-09-17"
 
 [[trusted.libm]]
 criteria = "safe-to-deploy"
-user-id = 55123 # rust-lang-owner
+user-id = 55123
 start = "2024-10-26"
 end = "2027-05-09"
 
