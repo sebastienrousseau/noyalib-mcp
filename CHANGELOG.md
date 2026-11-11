@@ -27,11 +27,18 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   corrections under the family's patch-version policy.
 - Release dry runs guard signing and GitHub release creation. Version
   checks include every tracked Cargo lock.
+- Execute documented stdio clients against the real six-tool catalogue.
+  File demos use a private scratch root, verify preserved source and
+  readback, and reject a failed server exit. Correct root, capability,
+  timeout and benchmark guidance; require Python 3 for these examples.
 - Prepare the next lockstep version for the ecosystem assurance work.
   Release dates and completed changes are recorded after verification.
 
 ### Security
 
+- Serialize session capacity checks with SDK insertion for both creation
+  and restoration. Concurrent requests can no longer admit extra sessions
+  above the configured cap. Retain a deterministic race reproducer.
 - Pin fuzz-workspace Tokio to patched 1.54.1 for RUSTSEC-2026-0386.
   The existing production Tokio version and reviewed SDK are retained.
 - Audit nested lockfiles and fuzz HTTP header guards.

@@ -5,9 +5,8 @@
 
 `noyalib-mcp` is a Model Context Protocol server that gives an AI
 agent lossless YAML editing. It speaks MCP over stdio, streamable
-HTTP or the older HTTP+SSE transport, and delegates every YAML
-operation to `noyalib::cst::Document`, so an edit preserves comments,
-indentation, and sibling entries byte for byte.
+HTTP or the older HTTP+SSE transport, and delegates parsing and editing to noyalib. CST edits preserve
+untouched comments, indentation and sibling source.
 
 The protocol itself is [`rmcp`](https://crates.io/crates/rmcp), the
 official Rust SDK: the framing, the handshake, the sessions and the
@@ -17,16 +16,15 @@ text a model reads. See
 
 ## Layers
 
-- **`src/main.rs`** is three lines: it hands the library's handler to
-  `transport::run`.
+- **`src/main.rs`** passes the version, arguments and handler factory
+  to `transport::run`.
 - **`src/transport.rs`** is the transport dispatch: the command line
   (`--transport`, `--host`, `--port`, `--version`, `--help`), the
   stdio session, the streamable HTTP listener at `/mcp`, and a bridge
   for the 2024-11-05 HTTP+SSE transport at `/sse` and `/messages/`
   (in `src/transport/sse.rs`) that the SDK no longer ships a server
-  for. It depends only on the SDK and on a `ServerHandler` passed in —
-  nothing in it knows what the tools are — so it is the same module in
-  every Rust server of the suite.
+  for. It accepts a `ServerHandler` factory and the crate's parse profile.
+  Tool dispatch remains in the handler.
 - **`src/lib.rs`** is the handler: `YamlServer` holds the tool and
   prompt routers, describes the server for `initialize` and
   `server/discover`, serves the resources, and turns a call for a tool

@@ -1,221 +1,88 @@
+<!-- SPDX-FileCopyrightText: 2026 Noyalib -->
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+
 # MCP tools reference
 
-The complete list of tools `noyalib-mcp` advertises via
-`tools/list`, with their JSON Schema input shape and example
-invocations. This file is the user-facing reference; the
-authoritative source is
-[`crates/noyalib-mcp/src/tools.rs::descriptors()`](../src/tools.rs).
+The server advertises six tools, one prompt and read-only reference
+resources. The authoritative tool names, input/output schemas and
+annotations come from [`src/tools.rs`](../src/tools.rs) and the live
+`tools/list` response. The SDK and [transport adapter](../src/transport.rs)
+serve stdio, streamable HTTP and legacy HTTP+SSE.
 
-The server is **dual-era**: it speaks **MCP 2026-07-28** (stateless per-request `_meta`, `server/discover`) and answers the legacy **2025-06-18** `initialize` handshake. Tool calls go through
-`tools/call`; see the [MCP spec](https://spec.modelcontextprotocol.io/)
-for the JSON-RPC envelope.
+## Tool catalogue
 
-## Tool list
+All arguments in the table are required strings unless marked otherwise.
+`doc_index` is a required non-negative integer, starting at zero.
 
-The server advertises **2 tools**. Every tool delegates to
-`noyalib::cst::Document` so edits round-trip with comments,
-indentation, and sibling entries preserved byte-for-byte.
+| Tool | Arguments | Successful structured output |
+|---|---|---|
+| `noyalib_get` | `file`, `path` | `value`: the source fragment exactly as written |
+| `noyalib_set` | `file`, `path`, `value` | `file`, `path`, `value` after replacing a YAML fragment |
+| `noyalib_set_multidoc` | `file`, `doc_index`, `path`, `value` | `file`, `doc_index`, `path`, `value` for the selected document |
+| `noyalib_parse` | `yaml` | `documents`: one JSON value per YAML document, tags stripped |
+| `noyalib_edit` | `yaml`, `path`, `value` | `yaml`: the edited source |
+| `noyalib_validate` | `yaml`, optional `schema` as JSON text | `valid`, optional parse-error location and schema violations |
 
-### `noyalib_get`
+File tools read or replace files under the configured root. Inline tools
+operate on their arguments. Edits preserve untouched source and refuse
+invalid replacement fragments. Read the full generated schema before
+constructing a request; field descriptions and examples are part of that
+catalogue. Successful tool results carry text and `structuredContent`.
 
-Read the YAML value at a dotted/indexed path in a file. Returns
-the source slice **exactly** — no re-quoting, no canonicalisation.
-Preserves comments and formatting for any later `noyalib_set`
-round-trip.
-
-**Input schema:**
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "file": {
-      "type": "string",
-      "description": "Path to the YAML file on disk."
-    },
-    "path": {
-      "type": "string",
-      "description": "Dotted/indexed path into the YAML, e.g. `server.host` or `items[0].name`."
-    }
-  },
-  "required": ["file", "path"]
-}
-```
-
-**Example invocation:**
+For example, after a negotiated stdio handshake:
 
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/call",
-  "params": {
-    "name": "noyalib_get",
-    "arguments": {
-      "file": "/etc/myapp/config.yaml",
-      "path": "server.host"
-    }
-  }
-}
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"noyalib_edit","arguments":{"yaml":"port: 8080 # keep\n","path":"port","value":"9090"}}}
 ```
 
-**Example response:**
+## Paths and failures
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "content": [
-      { "type": "text", "text": "api.example.com" }
-    ]
-  }
-}
-```
+Dotted paths select mappings; brackets select sequence elements:
+`server.port`, `items[0]`, `items[0].name`. A replacement value is a YAML
+fragment, not an encoded JSON value. A missing path or invalid fragment
+is a tool failure whose readable text explains the refusal.
 
-**Error codes:**
+A tool that runs but cannot complete returns a JSON-RPC result carrying
+`isError: true`; it is not a fixed `-32002` or `-32003` protocol error.
+Invalid JSON-RPC envelopes and argument decoding remain protocol failures.
+The live `noyalib://error-codes` resource describes the distinction.
+[SDK boundary tests](../tests/serve.rs) check structured results,
+unknown tools and failure shapes.
 
-| Code | Meaning |
-|---|---|
-| `-32000` | I/O error reading the file |
-| `-32001` | Parse error in the YAML |
-| `-32002` | Path not found in the document |
-| `-32602` | Missing or non-string argument |
+## Root, resources and work limits
 
-### `noyalib_set`
+Use `--root DIRECTORY` to restrict file tools; the default is the working
+directory. On Unix, directory-relative opens and replacement constrain
+path traversal and symlinks to that root. Other platforms use the
+canonical-path fallback described in [`src/fsio.rs`](../src/fsio.rs),
+which does not provide the same protection against a concurrent path swap.
+The root is a file-access boundary, not an authentication mechanism.
 
-Set the YAML value at a dotted/indexed path in a file. Only the
-touched span is rewritten — every comment, blank line, and
-sibling entry is preserved byte-for-byte. Useful for
-Renovate-style version bumps and config patches by AI agents.
+Document, nesting, file-type, schema and session limits apply before the
+corresponding work where supported. Schema text is limited to 65,536 bytes;
+validation reports up to 100 violations plus a truncation entry. See
+[limit tests](../tests/limits.rs) and [HTTP guards](../tests/http/guards.rs).
 
-**Input schema:**
+Tool work runs on a blocking pool. A call timeout answers with a failure,
+but cannot interrupt an already running blocking operation: it may finish
+in the background. Do not treat timeout or client cancellation as a
+transaction rollback. Multiple sessions do not serialize edits to the same
+file; coordinate writers externally. Atomic replacement avoids partial
+file contents, but does not provide a cross-client read/modify/write lock
+or a power-loss guarantee.
 
-```json
-{
-  "type": "object",
-  "properties": {
-    "file": {
-      "type": "string",
-      "description": "Path to the YAML file on disk."
-    },
-    "path": {
-      "type": "string",
-      "description": "Dotted/indexed path into the YAML."
-    },
-    "value": {
-      "type": "string",
-      "description": "Replacement value as a YAML fragment (e.g. `0.0.2`, `\"hello\"`, `[1, 2, 3]`). Must parse in the target position; the document is left unchanged on parse error."
-    }
-  },
-  "required": ["file", "path", "value"]
-}
-```
+## Protocol and discovery
 
-**Example invocation:**
+The SDK supports negotiated revisions through the current initialize-era
+revision and the 2026-07-28 stateless revision. In stateless HTTP, send the
+required protocol, routing headers and per-request `_meta`; use
+`server/discover` instead of an initialize session. The executable
+[HTTP tests](../tests/http.rs) show both envelopes. Legacy SSE uses its
+own endpoint and session lifecycle. Unsupported extensions are not implied
+by the SDK version.
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "method": "tools/call",
-  "params": {
-    "name": "noyalib_set",
-    "arguments": {
-      "file": "/etc/myapp/config.yaml",
-      "path": "server.port",
-      "value": "9090"
-    }
-  }
-}
-```
-
-**Example response:**
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "result": {
-    "content": [
-      { "type": "text", "text": "set server.port = 9090 in /etc/myapp/config.yaml (lossless: comments and formatting preserved)" }
-    ]
-  }
-}
-```
-
-**Error codes:**
-
-| Code | Meaning |
-|---|---|
-| `-32000` | I/O error reading or writing the file |
-| `-32001` | Parse error in the source YAML |
-| `-32003` | The new value cannot be applied at the path (parse error in the fragment, or path doesn't exist) |
-| `-32602` | Missing or non-string argument |
-
-## Lossless edit guarantee
-
-Both tools route through `noyalib::cst::Document`, so the on-disk
-file after a `noyalib_set`:
-
-- Has the same comments at the same positions
-- Has the same blank lines and indentation
-- Has the same anchor / alias relationships
-- Has the same key order
-- Has the new value at the requested path
-
-The only bytes that change are the bytes for the value itself.
-Empirically: `git diff` after a single `noyalib_set` shows a 1-line
-change. This is the contract.
-
-## Path syntax
-
-The `path` argument follows the same syntax as
-`noyalib::Value::get_path` and `noyalib::cst::Document::get`:
-
-| Path | Selects |
-|---|---|
-| `name` | Top-level key `name` |
-| `server.host` | `host` inside the mapping at `server` |
-| `items[0]` | First element of the sequence at `items` |
-| `items[0].name` | `name` inside the first element |
-| `services.api.replicas` | Deeply nested |
-
-## Path-not-found semantics
-
-`noyalib_get` returns error `-32002` if the path does not exist.
-`noyalib_set` will *create* missing intermediate keys at the same
-indent level when possible; if the parent path does not exist or
-points to an incompatible shape (e.g. `server.host[0]` when
-`server.host` is a string), it returns `-32003`.
-
-## Concurrency
-
-The server processes one request at a time per stdio session.
-Concurrent edits to the same file from multiple sessions are not
-serialised by the server — clients should coordinate externally
-(e.g. via flock) if multiple agents may edit the same file.
-
-## Capabilities advertised at `initialize`
-
-```json
-{
-  "protocolVersion": "2025-06-18",
-  "serverInfo": {
-    "name": "noyalib-mcp",
-    "version": "0.0.1"
-  },
-  "capabilities": {
-    "tools": {}
-  }
-}
-```
-
-The server does not advertise `prompts` or `resources` capabilities
-— it's tool-only.
-
-## Related
-
-- [Agent integration](./agent-integration.md) — Claude Desktop,
-  Cursor, and other client setup
-- [Crate README](../README.md) — install + crate-level overview
+Initialize advertises tools, prompts and resources; the server version
+comes from the crate build. The `format_and_lint_yaml` prompt is a text
+workflow, not a tool that automatically edits a file. Static resources
+include `noyalib://tools` and `noyalib://error-codes`, plus descriptors
+at `noyalib://tool/{name}`. They do not read arbitrary caller paths.

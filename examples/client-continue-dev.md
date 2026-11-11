@@ -69,12 +69,12 @@ itself parseable / writeable by `noyalib-mcp`.)
 ## Verifying the install
 
 After saving config, reload Continue (Continue panel → 3-dot
-menu → `Reload`). The two `noyalib_*` tools should appear in
+menu → `Reload`). The six `noyalib_*` tools should appear in
 the *Tools* drawer:
 
 - `noyalib_get` — read a YAML path.
-- `noyalib_set` — write a YAML path with comment-preserving
-  surgical edit.
+- `noyalib_set` and `noyalib_set_multidoc`: edit a file or selected document.
+- `noyalib_parse`, `noyalib_edit`, `noyalib_validate`: operate on inline source.
 
 Smoke test: ask Continue *"Read port from /tmp/test.yaml"* —
 the assistant should dispatch `noyalib_get` and surface the

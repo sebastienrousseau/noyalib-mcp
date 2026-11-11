@@ -6,24 +6,27 @@ Agent-driving demos and per-host client configuration snippets.
 
 ## Protocol-level scripts
 
-Each script pipes a sequence of newline-delimited JSON-RPC 2.0
-frames into `noyalib-mcp` over stdio and prints the response
-stream.
+The Bash entry points use Python 3 to hold a real stdio session. Each
+request waits for its response before continuing. They print the server's
+JSON responses, check their semantics and stop with an error on failure.
+Set `NOYALIB_MCP_BIN` to select a built binary; otherwise it must be on PATH.
+`PYTHON` can select the Python 3 interpreter.
 
-| Script | What it shows |
+| Script | Executed operation |
 |---|---|
-| [`handshake.sh`](handshake.sh) | `initialize` → `tools/list` smoke test. Confirms the binary speaks the protocol and announces the expected tools. |
-| [`format-call.sh`](format-call.sh) | Call the `format` tool on a poorly-spaced document. Demonstrates that comments + indentation pass through the CST formatter unchanged. |
-| [`set-then-get.sh`](set-then-get.sh) | Round-trip the mutation surface: `set` rewrites `server.port`, `get` reads it back. Surgical edit; surrounding bytes untouched. |
+| [`handshake.sh`](handshake.sh) | Initialize and verify the complete six-tool catalogue. |
+| [`set-then-get.sh`](set-then-get.sh) | Call `noyalib_set`, verify surrounding bytes, then read back with `noyalib_get`. |
+| [`format-call.sh`](format-call.sh) | Retrieve `format_and_lint_yaml` via `prompts/get`. The historical filename is retained; there is no `format` tool. |
 
-```bash
-chmod +x crates/noyalib-mcp/examples/*.sh
-crates/noyalib-mcp/examples/handshake.sh
+```sh
+bash examples/handshake.sh
+bash examples/set-then-get.sh
+bash examples/format-call.sh
 ```
 
-The scripts use `printf` / `echo` only (no `jq`, no `node`), so
-they work on any POSIX shell. Pipe through `jq -c .` if you
-want pretty-printed JSON responses for human reading.
+The clients use a private temporary root. The file demo edits only its own
+scratch file and removes it afterward. They leave the caller's files
+untouched. `mcp-session.py` is the shared implementation.
 
 ## Client configurations
 
@@ -38,7 +41,7 @@ applications:
 | [`client-continue-dev.md`](client-continue-dev.md) | Continue.dev (VS Code + JetBrains) | `mcpServers.noyalib` block for `~/.continue/config.{json,yaml}`, plus `autoAllowedTools` hardening note |
 | [`hosted-mcp-run.md`](hosted-mcp-run.md) | Remote / hosted gateways (mcp.run, mcp-proxy, Docker / Kubernetes) | Sidecar deployment, stdio→SSE / HTTP brokers, container Dockerfile, hardening notes |
 
-Once registered, the LLM agent in each host can call the two
+Once registered, the client can discover all six
 `noyalib_*` tools (`tools/list` is the discovery handshake; the
 agent decides when to invoke based on user intent).
 

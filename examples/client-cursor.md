@@ -102,21 +102,18 @@ settings for the equivalent key (most use `mcpServers`).
 which noyalib-mcp
 noyalib-mcp --version
 
-# 2. Smoke-test the JSON-RPC handshake (returns one reply)
-crates/noyalib-mcp/examples/handshake.sh
+# 2. Smoke-test the JSON-RPC handshake (waits for initialize and the tool catalogue)
+bash examples/handshake.sh
 
 # 3. Set a value and read it back
-crates/noyalib-mcp/examples/set-then-get.sh
+bash examples/set-then-get.sh
 ```
 
-## Atomic writes — Windows note
+## File replacement
 
-`noyalib_set` writes via *atomic rename*: it writes the new
-contents to a sibling temp file, fsync's, then renames over
-the target. On POSIX this is naturally atomic; on Windows it
-uses
-`MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`
-semantics so concurrent readers always see either the old or
-the new contents — never a half-write or a stale page-cache
-observation. This matters for editors that re-read the file
-immediately after the LLM call lands.
+File tools replace a synced temporary sibling over the selected file.
+This prevents partial content, while cross-client edit isolation,
+power-loss durability and complete metadata preservation require separate
+coordination. Unix confinement and the other platforms' path fallback
+have different guarantees; see the
+[tools reference](../docs/tools-reference.md#root-resources-and-work-limits).
