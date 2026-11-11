@@ -42,7 +42,7 @@ uuid = { version = "1", features = ["v4"] }
 # file tools, so a path is checked and opened in one walk from the
 # root's handle. The same crate and version line the core's include
 # resolver uses; safe API, no FFI in this crate.
-rustix = { version = "1.1.4", features = ["fs"] }
+rustix = { version = "1.1.6", features = ["fs"] }
 
 [dev-dependencies]
 criterion = "0.8"

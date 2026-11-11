@@ -15,6 +15,8 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ### Changed
 
+- Require rustix 1.1.6 for Unix filesystem operations, including downstream
+  dependency resolution.
 - Pin and audit the MCP Inspector consumer at 2.14.0 with a committed npm
   lock. Check unpublished version branches against the audited core source
   while keeping registry publication checks separate.
