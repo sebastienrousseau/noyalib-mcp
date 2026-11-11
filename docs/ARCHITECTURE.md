@@ -64,8 +64,14 @@ JSON-RPC error, which the client handles.
 
 Everything the agent sends arrives through the SDK and reaches the six
 functions as deserialised arguments. Those functions are the surface
-this crate owns, and the stateless three are fuzzed directly
-(`fuzz_targets/tools.rs`); CI replays the seed corpus on every push.
+this crate owns. The stateless three are fuzzed directly (`tools`), HTTP
+header guards separately (`http_headers`), and the actual private capped
+SDK manager through a bounded state model (`session_lifecycle`). The state
+target retains live transports, checks create/restore/close against its
+model, races admissions and verifies capacity reuse. It uses no listener
+or input-controlled filesystem path; wire framing remains a separate
+protocol-test scope. CI builds every target and replays seeds on every push;
+scheduled campaigns retain elapsed time, executions, source and findings.
 
 The HTTP listeners exist only when `--transport` asks for them, bind
 the loopback interface unless `--host` says otherwise, and do not

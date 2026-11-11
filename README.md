@@ -231,11 +231,15 @@ make
 make test
 make clippy
 make fmt
-cargo fuzz run fuzz_tool_call
+cargo +nightly fuzz run tools
 ```
 
 CI checks Rust formatting, linting, tests, documentation, dependency policy,
-fuzz regressions, protocol behaviour, and the shared YAML test suite. See
+fuzz regressions, protocol behaviour, and the shared YAML test suite. The
+`tools` target exercises stateless tool inputs; `http_headers` exercises
+listener guards; `session_lifecycle` drives the actual capped SDK manager
+through create, restore, close, concurrent admission and capacity reuse.
+All targets run bounded scheduled campaigns and retain separate receipts. See
 [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
 ## Security

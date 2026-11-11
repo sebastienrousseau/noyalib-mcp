@@ -14,6 +14,10 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 axum = { version = "0.8", default-features = false }
+# Reuse the same SDK and runtime already selected by the application.
+futures = "0.3"
+rmcp = "3.9"
+tokio = "1"
 
 [dependencies.noyalib-mcp]
 path = ".."
@@ -28,6 +32,13 @@ bench = false
 [[bin]]
 name = "http_headers"
 path = "fuzz_targets/http_headers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "session_lifecycle"
+path = "fuzz_targets/session_lifecycle.rs"
 test = false
 doc = false
 bench = false
