@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: sebastienrousseau/noyalib
-          ref: 0c987e3fdca4b8c8c52078d065ad2193c2fbca14
+          ref: 6d2f324db7f04b5788deaf2393ab58b7727e5664
           persist-credentials: false
           path: .candidate-core
 
