@@ -31,10 +31,14 @@ class ExampleClients(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='noyalib-example-caller-') as scratch:
             sentinel = Path(scratch) / 'config.yaml'
             sentinel.write_text('port: 7000 # caller owns this\n')
-            process = subprocess.run(['bash', str(ROOT / 'examples' / name)], cwd=scratch,
+            shell = shutil.which('bash', path=env['PATH'])
+            self.assertIsNotNone(shell, 'Bash must be installed for the shell examples')
+            shell = str(Path(shell).resolve())
+            process = subprocess.run([shell, str(ROOT / 'examples' / name)], cwd=scratch,
                                      env=env, capture_output=True, text=True, timeout=20)
             self.assertEqual(sentinel.read_text(), 'port: 7000 # caller owns this\n')
-        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(process.returncode, 0,
+                         f'launcher={shell!r}\nstdout:\n{process.stdout}\nstderr:\n{process.stderr}')
         messages = [json.loads(line) for line in process.stdout.splitlines() if line.strip()]
         self.assertTrue(messages, 'example emitted no protocol responses')
         self.assertTrue(all('error' not in response for response in messages), messages)
