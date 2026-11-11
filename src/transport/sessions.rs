@@ -26,6 +26,8 @@ use rmcp::transport::streamable_http_server::session::{
 pub(super) struct CappedSessions {
     inner: LocalSessionManager,
     max: usize,
+    // Serialize the capacity check with SDK insertion for both admission paths.
+    admission: tokio::sync::Mutex<()>,
 }
 
 impl CappedSessions {
@@ -33,6 +35,7 @@ impl CappedSessions {
         Self {
             inner: LocalSessionManager::default(),
             max,
+            admission: tokio::sync::Mutex::new(()),
         }
     }
 }
@@ -68,6 +71,7 @@ impl SessionManager for CappedSessions {
     type Transport = Transport;
 
     async fn create_session(&self) -> Outcome<(SessionId, Transport)> {
+        let _admission = self.admission.lock().await;
         if self.inner.sessions.read().await.len() >= self.max {
             return Err(CappedError::Full(self.max));
         }
@@ -129,6 +133,7 @@ impl SessionManager for CappedSessions {
     }
 
     async fn restore_session(&self, id: SessionId) -> Outcome<RestoreOutcome<Transport>> {
+        let _admission = self.admission.lock().await;
         // A restore re-creates a session, so it counts against the cap
         // like `create_session`; one already in memory adds nothing.
         let present = self.inner.sessions.read().await.contains_key(&id);
@@ -147,6 +152,87 @@ impl SessionManager for CappedSessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn queued_creates_cannot_both_pass_the_capacity_check() {
+        let sessions = CappedSessions::new(1);
+        // Queue both map readers before allowing the SDK's storage to
+        // progress. This reproduces the check/insert interleaving without
+        // relying on OS thread scheduling or a sleep.
+        let storage = sessions.inner.sessions.write().await;
+        let mut first = Box::pin(sessions.create_session());
+        let mut second = Box::pin(sessions.create_session());
+        assert!(futures::poll!(first.as_mut()).is_pending());
+        assert!(futures::poll!(second.as_mut()).is_pending());
+        drop(storage);
+        let (first, second) = tokio::join!(first, second);
+        let accepted = [first, second];
+        assert_eq!(accepted.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(sessions.inner.sessions.read().await.len(), 1);
+    }
+
+    async fn assert_concurrent_admission_is_capped(mode: u8) {
+        // Keep transports alive until every contender has finished. Otherwise
+        // worker cleanup can free a slot while admission is still being tested.
+        for _ in 0..16 {
+            let sessions = Arc::new(CappedSessions::new(1));
+            let barrier = Arc::new(tokio::sync::Barrier::new(33));
+            let mut tasks = Vec::new();
+            for index in 0..32 {
+                let sessions = Arc::clone(&sessions);
+                let barrier = Arc::clone(&barrier);
+                tasks.push(tokio::spawn(async move {
+                    barrier.wait().await;
+                    if mode == 0 || (mode == 2 && index % 2 == 0) {
+                        sessions.create_session().await
+                    } else {
+                        let id: SessionId = format!("restored-{index}").into();
+                        match sessions.restore_session(id.clone()).await? {
+                            RestoreOutcome::Restored(transport) => Ok((id, transport)),
+                            RestoreOutcome::AlreadyPresent => panic!("unique restore id existed"),
+                            _ => panic!("unexpected restore outcome"),
+                        }
+                    }
+                }));
+            }
+            barrier.wait().await;
+            let mut accepted = Vec::new();
+            for task in tasks {
+                match task.await.unwrap() {
+                    Ok(session) => accepted.push(session),
+                    Err(CappedError::Full(1)) => {}
+                    Err(error) => panic!("unexpected admission failure: {error}"),
+                }
+            }
+            assert_eq!(
+                accepted.len(),
+                1,
+                "mode {mode}: concurrent admission exceeded cap"
+            );
+            assert_eq!(sessions.inner.sessions.read().await.len(), 1);
+            let (id, _transport) = accepted.pop().unwrap();
+            sessions.close_session(&id).await.unwrap();
+            assert!(
+                sessions.create_session().await.is_ok(),
+                "closed slot is reusable"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn concurrent_creates_respect_the_session_cap() {
+        assert_concurrent_admission_is_capped(0).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn concurrent_restores_respect_the_session_cap() {
+        assert_concurrent_admission_is_capped(1).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn concurrent_create_and_restore_share_the_session_cap() {
+        assert_concurrent_admission_is_capped(2).await;
+    }
 
     #[tokio::test]
     async fn the_cap_refuses_one_session_too_many_until_one_closes() {
