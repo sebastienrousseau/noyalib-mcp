@@ -615,6 +615,14 @@ where
     T: Send + 'static,
     F: FnOnce() -> Result<T, String> + Send + 'static,
 {
+    run_blocking(limit, work).await
+}
+
+async fn run_blocking<T, F>(limit: std::time::Duration, work: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
     match tokio::time::timeout(limit, tokio::task::spawn_blocking(work)).await {
         Ok(joined) => joined.unwrap_or_else(|e| Err(internal(e))),
         Err(_) => Err(format!(
