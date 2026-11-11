@@ -191,7 +191,10 @@ impl YamlServer {
     /// The same server answering any tool call that runs longer than
     /// `limit` with an error ([`DEFAULT_CALL_TIMEOUT`] unless set). The
     /// work itself cannot be interrupted: it finishes on its blocking
-    /// thread and its result is dropped.
+    /// thread and its result is dropped. The process admits at most 64
+    /// outstanding blocking jobs across all handlers. Timed-out or cancelled
+    /// requests keep their job's slot until it finishes; excess calls receive
+    /// a readable busy tool failure without starting more work.
     #[must_use]
     pub fn with_call_timeout(mut self, limit: std::time::Duration) -> Self {
         self.call_timeout = limit;

@@ -13,6 +13,7 @@
 - [Detailed README reference](README-REFERENCE.md)
 - [Decision records](adr/index.md)
   - [0001. Three transports, one command line](adr/0001-three-transports-one-command-line.md)
+  - [0002. Bound blocking work by job lifetime](adr/0002-bounded-blocking-work.md)
 
 - [v0.0.17](release-notes/v0.0.17.md)
 - [v0.0.16](release-notes/v0.0.16.md)

@@ -63,6 +63,14 @@ corresponding work where supported. Schema text is limited to 65,536 bytes;
 validation reports up to 100 violations plus a truncation entry. See
 [limit tests](../tests/limits.rs) and [HTTP guards](../tests/http/guards.rs).
 
+The process admits at most 64 outstanding blocking tool jobs across all
+handlers and transports. Excess calls receive a readable busy tool result
+without executing their work. This is separate from the HTTP session cap.
+A timed-out or cancelled request keeps its slot until its blocking job
+actually finishes; completion or panic returns capacity. Retry a busy call
+after outstanding work completes. The
+[ownership decision](adr/0002-bounded-blocking-work.md) records the boundary.
+
 Tool work runs on a blocking pool. A call timeout answers with a failure,
 but cannot interrupt an already running blocking operation: it may finish
 in the background. Do not treat timeout or client cancellation as a

@@ -198,7 +198,7 @@ notes = "Reviewed unchanged MCP runtime Rust against verified published 0.0.59. 
 who = "OpenAI Codex"
 criteria = "safe-to-deploy"
 delta = "0.0.60 -> 0.0.61"
-notes = "Reviewed the v0.0.60 to v0.0.61 source delta, including signed 839e637: a shared async mutex serializes capacity checks and SDK insertion for creation and restoration. The deterministic cap reproducer, eight session tests and full 132-test MCP suite pass. Public APIs, features, SDK and crypto dependencies are unchanged. Independent review and exact registry-source checks remain separate; see supply-chain/reviews/v0.0.61.md."
+notes = "Reviewed the v0.0.60 to v0.0.61 source delta, including signed 839e637: a shared async mutex serializes capacity checks and SDK insertion for creation and restoration. The deterministic cap reproducer, eight session tests and full 132-test MCP suite pass. Public APIs, features, SDK and crypto dependencies are unchanged. A following process-wide 64-job budget keeps permits inside blocking closures through timeout and cancellation; three lifecycle cases and the full 135-test battery pass. No dependency or audit-policy changes. Independent review and exact registry-source checks remain separate; see supply-chain/reviews/v0.0.61.md."
 
 [[audits.pin-project-lite]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"

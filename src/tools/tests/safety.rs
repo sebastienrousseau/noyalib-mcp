@@ -333,3 +333,124 @@ fn a_write_the_directory_refuses_leaves_the_file_alone() {
     }
     let _ = fs::remove_dir_all(dir);
 }
+
+async fn assert_busy_without_starting_more_work(slots: std::sync::Arc<tokio::sync::Semaphore>) {
+    let (executed, observed) = tokio::sync::oneshot::channel();
+    let result = run_blocking(slots, std::time::Duration::from_secs(1), move || {
+        let _ = executed.send(());
+        Ok(())
+    })
+    .await;
+    assert!(
+        matches!(&result, Err(message) if message.contains("busy")),
+        "{result:?}"
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(5), observed)
+            .await
+            .unwrap()
+            .is_err(),
+        "a refused job still executed"
+    );
+}
+
+#[tokio::test]
+async fn worker_budget_keeps_timed_out_work_reserved_until_it_finishes() {
+    let slots = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
+    let (release, wait) = std::sync::mpsc::channel();
+    let (started, ready) = tokio::sync::oneshot::channel();
+    let running = tokio::spawn(run_blocking(
+        std::sync::Arc::clone(&slots),
+        std::time::Duration::from_millis(10),
+        move || {
+            let _ = started.send(());
+            wait.recv().map_err(|error| error.to_string())
+        },
+    ));
+    tokio::time::timeout(std::time::Duration::from_secs(5), ready)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(running.await.unwrap().unwrap_err().contains("time limit"));
+    assert_busy_without_starting_more_work(std::sync::Arc::clone(&slots)).await;
+    release.send(()).unwrap();
+    let returned = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        std::sync::Arc::clone(&slots).acquire_owned(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    drop(returned);
+    assert_eq!(
+        run_blocking(slots, std::time::Duration::from_secs(1), || Ok(7))
+            .await
+            .unwrap(),
+        7
+    );
+}
+
+#[tokio::test]
+async fn worker_budget_keeps_cancelled_work_reserved_until_it_finishes() {
+    let slots = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
+    let (release, wait) = std::sync::mpsc::channel();
+    let (started, ready) = tokio::sync::oneshot::channel();
+    let running = tokio::spawn(run_blocking(
+        std::sync::Arc::clone(&slots),
+        std::time::Duration::from_secs(60),
+        move || {
+            let _ = started.send(());
+            wait.recv().map_err(|error| error.to_string())
+        },
+    ));
+    tokio::time::timeout(std::time::Duration::from_secs(5), ready)
+        .await
+        .unwrap()
+        .unwrap();
+    running.abort();
+    assert!(running.await.unwrap_err().is_cancelled());
+    assert_busy_without_starting_more_work(std::sync::Arc::clone(&slots)).await;
+    release.send(()).unwrap();
+    let returned = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        std::sync::Arc::clone(&slots).acquire_owned(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    drop(returned);
+    assert_eq!(
+        run_blocking(slots, std::time::Duration::from_secs(1), || Ok(8))
+            .await
+            .unwrap(),
+        8
+    );
+}
+
+#[tokio::test]
+async fn worker_budget_recovers_after_panic_and_success() {
+    let slots = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
+    let failed = run_blocking::<(), _>(
+        std::sync::Arc::clone(&slots),
+        std::time::Duration::from_secs(1),
+        || panic!("injected worker failure"),
+    )
+    .await;
+    assert!(failed.unwrap_err().contains("internal:"));
+    assert_eq!(
+        run_blocking(
+            std::sync::Arc::clone(&slots),
+            std::time::Duration::from_secs(1),
+            || Ok(9)
+        )
+        .await
+        .unwrap(),
+        9
+    );
+    assert_eq!(
+        run_blocking(slots, std::time::Duration::from_secs(1), || Ok(10))
+            .await
+            .unwrap(),
+        10
+    );
+}

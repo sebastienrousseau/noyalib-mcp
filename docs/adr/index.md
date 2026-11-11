@@ -10,3 +10,4 @@ lockstep release model, the workspace split — live in the core
 repository's [`docs/adr/`](https://github.com/sebastienrousseau/noyalib/tree/main/docs/adr).
 
 - [0001. Serve stdio, streamable HTTP and SSE from one command line](0001-three-transports-one-command-line.md)
+- [0002. Bound blocking work by job lifetime](0002-bounded-blocking-work.md)

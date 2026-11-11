@@ -36,6 +36,10 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ### Security
 
+- Bound outstanding blocking tool jobs to 64 per process across every
+  handler and transport. Jobs retain capacity after timeout or client
+  cancellation until work ends; excess work receives a readable busy
+  result. Completion and panic release capacity.
 - Serialize session capacity checks with SDK insertion for both creation
   and restoration. Concurrent requests can no longer admit extra sessions
   above the configured cap. Retain a deterministic race reproducer.
