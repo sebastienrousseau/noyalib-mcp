@@ -95,7 +95,34 @@ impl fmt::Display for SetMultidocOutput {
 pub struct ParseOutput {
     /// One JSON value per document of the stream, custom tags
     /// stripped. A single-document text gives one element.
+    #[schemars(schema_with = "json_documents_schema")]
     pub documents: Vec<JsonValue>,
+}
+
+// Explicitly name all JSON types while retaining the unrestricted value
+// contract. Some MCP clients reject schemars' equivalent boolean `true`.
+fn json_documents_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "array",
+        "items": {"anyOf": [
+            {"type": "null"}, {"type": "boolean"}, {"type": "number"},
+            {"type": "string"}, {"type": "array"}, {"type": "object"}
+        ]}
+    })
+}
+
+// Change only schema spelling. Keep Option's required/absent behavior and
+// each branch's existing constraints, descriptions and examples.
+fn single_type_branches(schema: &mut schemars::Schema) {
+    let Some(types) = schema.get("type").and_then(JsonValue::as_array).cloned() else {
+        return;
+    };
+    schema.remove("type");
+    let branches = types
+        .into_iter()
+        .map(|kind| serde_json::json!({"type": kind}))
+        .collect();
+    schema.insert("anyOf".to_owned(), JsonValue::Array(branches));
 }
 
 impl fmt::Display for ParseOutput {
@@ -143,12 +170,15 @@ pub struct ValidateOutput {
     pub valid: bool,
     /// The parse error, when the text does not parse.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(transform = single_type_branches)]
     pub error: Option<String>,
     /// The line of the parse error, when there is one.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(transform = single_type_branches)]
     pub line: Option<usize>,
     /// The column of the parse error, when there is one.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(transform = single_type_branches)]
     pub column: Option<usize>,
     /// Every schema violation; empty when the document is valid or
     /// no schema was given.
@@ -678,6 +708,7 @@ pub struct ValidateArgs {
     /// A JSON Schema, as JSON text (optional).
     #[schemars(example = &"{\"type\":\"object\",\"required\":[\"server\"]}")]
     #[serde(default)]
+    #[schemars(transform = single_type_branches)]
     pub schema: Option<String>,
 }
 

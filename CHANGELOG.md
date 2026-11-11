@@ -15,6 +15,9 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ### Changed
 
+- Pin and audit the MCP Inspector consumer at 2.14.0 with a committed npm
+  lock. Check unpublished version branches against the audited core source
+  while keeping registry publication checks separate.
 - Preserve unsigned radix string keys during serialization. Escalate CST
   root shape changes to a full parse to preserve UTF-8 token boundaries.
 - Core parsing now preserves anchor declaration order and clips only a
@@ -97,6 +100,8 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ### Fixed
 
+- Describe unrestricted JSON output and nullable fields with portable
+  schema objects. Preserve scalar, array, object, null and absent values.
 - The npm wrapper publishes again. The v0.0.55 release built and
   attached every per-target archive, but the step that writes the
   wrapper's `digests.json` unpacked the Windows `.zip` with `tar`, which

@@ -34,6 +34,35 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check out the audited core for unpublished version branches
+        if: startsWith(github.head_ref || github.ref_name, 'feat/')
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: sebastienrousseau/noyalib
+          ref: b6fe8964150af08f81f6ad546d08584f41f16a1c
+          persist-credentials: false
+          path: .candidate-core
+
+      - name: Use a local candidate override without changing registry pins
+        if: startsWith(github.head_ref || github.ref_name, 'feat/')
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, tomllib
+          root = pathlib.Path.cwd()
+          core = root / '.candidate-core/crates/noyalib'
+          package = tomllib.loads((core / 'Cargo.toml').read_text())['package']
+          product = tomllib.loads((root / 'Cargo.toml').read_text())
+          dependency = product['dependencies']['noyalib']
+          pin = dependency if isinstance(dependency, str) else dependency['version']
+          if product['package']['version'] != package['version'] or pin != '=' + package['version']:
+              raise SystemExit('candidate core does not match the exact product version')
+          config = root / '.cargo/config.toml'
+          config.parent.mkdir(exist_ok=True)
+          with config.open('x') as stream:
+              stream.write('[patch.crates-io]\nnoyalib = { path = ' + json.dumps(str(core)) + ' }\n')
+          print('Testing the audited local candidate; registry release gates remain separate.')
+          PY
+
       # SHA-pinned like release.yml. dtolnay/rust-toolchain reads the
       # toolchain from the ref name, so a SHA pin must name it explicitly.
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
@@ -47,14 +76,21 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "22"
+          node-version: "24"
+
+      - name: Install and audit the locked Inspector consumer
+        run: |
+          npm ci --ignore-scripts --prefix tests/inspector
+          npm audit --package-lock-only --ignore-scripts --prefix tests/inspector
 
       - name: Build noyalib-mcp (release)
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/target-mcp-inspect
-        run: cargo build --release -p noyalib-mcp
+        run: cargo build --release --locked -p noyalib-mcp
 
       - name: List tools via MCP Inspector CLI
         run: |
           BIN="${{ github.workspace }}/target-mcp-inspect/release/noyalib-mcp"
-          npx -y @modelcontextprotocol/inspector --cli "$BIN" --method tools/list
+          tests/inspector/node_modules/.bin/mcp-inspector --cli "$BIN" --method tools/list --strict
+      - name: Refuse changed Cargo locks
+        run: git diff --exit-code -- Cargo.lock fuzz/Cargo.lock
