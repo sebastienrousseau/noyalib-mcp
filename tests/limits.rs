@@ -231,3 +231,30 @@ fn yaml_text_over_the_document_limit_is_refused_before_parsing() {
     }
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[test]
+fn unicode_root_edit_returns_source_and_keeps_the_session_alive() {
+    let root = scratch("unicode-root");
+    let mut session = Session::start(&root);
+    let fragment = "\u{799}\r#";
+    let id = session.call(
+        "noyalib_edit",
+        json!({"yaml": "-", "path": "", "value": fragment}),
+    );
+    let result = session
+        .reply(id, Duration::from_secs(30))
+        .expect("edit reply");
+    assert_eq!(
+        result["result"]["structuredContent"]["yaml"], fragment,
+        "{result}"
+    );
+    let id = session.call("noyalib_parse", json!({"yaml": "alive: true\n"}));
+    let result = session
+        .reply(id, Duration::from_secs(30))
+        .expect("next reply");
+    assert_eq!(
+        result["result"]["structuredContent"]["documents"][0]["alive"], true,
+        "{result}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
