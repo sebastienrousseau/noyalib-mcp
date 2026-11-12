@@ -658,3 +658,6 @@ fn a_port_in_use_is_reported_not_swallowed() {
 // their own file to hold this one to size.
 #[path = "http/guards.rs"]
 mod guards;
+
+#[path = "http/lifecycle.rs"]
+mod lifecycle;
