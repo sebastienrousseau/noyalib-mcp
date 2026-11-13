@@ -42,6 +42,13 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 - Prepare the next lockstep version for the ecosystem assurance work.
   Release dates and completed changes are recorded after verification.
 
+### Fixed
+
+- Retain the 22-byte leading-CR Unicode root-edit regression in the direct
+  tools corpus and a real stdio session. The corrected core CST repair
+  keeps wrapper bytes outside the edited tree; the session answers a
+  subsequent parse after the edit.
+
 ### Security
 
 - Bound outstanding blocking tool jobs to 64 per process across every

@@ -258,3 +258,34 @@ fn unicode_root_edit_returns_source_and_keeps_the_session_alive() {
     );
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[test]
+fn unicode_mapping_root_edit_with_leading_cr_keeps_the_session_alive() {
+    let input = include_str!("fixtures/cst-leading-cr-root-edit.bin");
+    let mut parts = input.splitn(4, '\0');
+    let source = parts.next().unwrap();
+    let path = parts.next().unwrap();
+    let fragment = parts.next().unwrap();
+    let root = scratch("unicode-mapping-root");
+    let mut session = Session::start(&root);
+    let id = session.call(
+        "noyalib_edit",
+        json!({"yaml": source, "path": path, "value": fragment}),
+    );
+    let result = session
+        .reply(id, Duration::from_secs(30))
+        .expect("edit reply");
+    assert_eq!(
+        result["result"]["structuredContent"]["yaml"], fragment,
+        "{result}"
+    );
+    let id = session.call("noyalib_parse", json!({"yaml": "alive: true\n"}));
+    let result = session
+        .reply(id, Duration::from_secs(30))
+        .expect("next reply");
+    assert_eq!(
+        result["result"]["structuredContent"]["documents"][0]["alive"], true,
+        "{result}"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
