@@ -15,6 +15,14 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ### Changed
 
+- Retire the unpublished v0.0.60 release attempt by maintainer decision on
+  2026-11-13. Preserve signed tag object
+  `b28d529f8bae59bbe94bdd91d25ec50173c8702b` and its source unchanged.
+  That source contains session-admission and blocking-work defects; its
+  registry core dependency also retains the Unicode root-edit panic.
+  The next publication is v0.0.61 with the fixed six-crate family after
+  release gates and independent review. MCP intentionally has no v0.0.60
+  registry publication; this is an approved lockstep-policy exception.
 - Require rustix 1.1.6 for Unix filesystem operations, including downstream
   dependency resolution.
 - Pin and audit the MCP Inspector consumer at 2.14.0 with a committed npm
@@ -48,7 +56,11 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 - Audit nested lockfiles and fuzz HTTP header guards.
 - Verify offline recovery and corrupted-cache refusal using the installed npm wrapper.
 
-## [v0.0.60] - 2026-11-10
+## [v0.0.60] - Retired, never published
+
+The 2026-11-10 signed release attempt was retired on 2026-11-13.
+The historical tag remains unchanged. The following entries describe that
+attempt's source, not a published package.
 
 ### Changed
 
