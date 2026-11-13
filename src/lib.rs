@@ -93,7 +93,7 @@ use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ErrorData,
+    CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ErrorData,
     Implementation, ListResourceTemplatesResult, ListResourcesResult, PaginatedRequestParams,
     ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, ServerCapabilities,
     ServerConfig,
@@ -289,7 +289,9 @@ impl ServerHandler for YamlServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListResourcesResult, ErrorData> {
-        Ok(ListResourcesResult::with_all_items(resources::list()).with_ttl_ms(CACHE_TTL_MS))
+        Ok(ListResourcesResult::with_all_items(resources::list())
+            .with_ttl_ms(CACHE_TTL_MS)
+            .with_cache_scope(CacheScope::Public))
     }
 
     async fn list_resource_templates(
@@ -299,7 +301,8 @@ impl ServerHandler for YamlServer {
     ) -> Result<ListResourceTemplatesResult, ErrorData> {
         Ok(
             ListResourceTemplatesResult::with_all_items(resources::templates())
-                .with_ttl_ms(CACHE_TTL_MS),
+                .with_ttl_ms(CACHE_TTL_MS)
+                .with_cache_scope(CacheScope::Public),
         )
     }
 

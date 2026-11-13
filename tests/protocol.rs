@@ -342,6 +342,21 @@ fn prompts_and_resources_are_served_over_stdio() {
     assert_eq!(by_id(&replies, 7)["error"]["code"], -32002);
 }
 
+#[test]
+fn stateless_resources_list_states_ttl_and_cache_scope() {
+    let replies = converse(&[
+        r#"{"jsonrpc":"2.0","id":1,"method":"resources/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"resources/templates/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}"#,
+    ]);
+    assert_eq!(replies.len(), 2, "{replies:?}");
+    let res = &by_id(&replies, 1)["result"];
+    assert_eq!(res["ttlMs"], 3_600_000, "{res}");
+    assert_eq!(res["cacheScope"], "public", "{res}");
+    let tmpl = &by_id(&replies, 2)["result"];
+    assert_eq!(tmpl["ttlMs"], 3_600_000, "{tmpl}");
+    assert_eq!(tmpl["cacheScope"], "public", "{tmpl}");
+}
+
 /// A parse error in a later document of a stream is reported at its
 /// position in the file, not in the document that failed (noyalib
 /// #407). The bad alias is on line 5 of the file and line 2 of its own

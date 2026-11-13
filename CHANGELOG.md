@@ -15,6 +15,9 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ### Changed
 
+- `resources/list` and `resources/templates/list` explicitly state
+  `cacheScope: "public"` alongside `ttlMs` (SEP-2549) for the static
+  per-binary resource catalogue.
 - Retire the unpublished v0.0.60 release attempt by maintainer decision on
   2026-11-13. Preserve signed tag object
   `b28d529f8bae59bbe94bdd91d25ec50173c8702b` and its source unchanged.
