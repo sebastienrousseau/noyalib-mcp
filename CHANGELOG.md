@@ -13,6 +13,10 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ## [v0.0.62] - Unreleased
 
+v0.0.61 was never published: on 2026-11-15 the maintainer folded it into
+this release, in lockstep with the core, so the registry goes from
+v0.0.60 to v0.0.62. Every v0.0.61 change below ships here.
+
 ### Changed
 
 - **Breaking:** the core refuses a byte order mark (U+FEFF) inside plain
@@ -24,7 +28,10 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 - The exact core pin, `server.json`, `glama.json` and the npm wrapper
   advance to 0.0.62.
 
-## [v0.0.61] - Unreleased
+## [v0.0.61] - Not published
+
+Folded into v0.0.62 (2026-11-15); there is no v0.0.61 tag or registry
+release.
 
 ### Changed
 
