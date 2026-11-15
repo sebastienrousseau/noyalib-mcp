@@ -28,6 +28,11 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   registry publication; this is an approved lockstep-policy exception.
 - Require rustix 1.1.6 for Unix filesystem operations, including downstream
   dependency resolution.
+- Require tokio 1.53.3 so no release affected by RUSTSEC-2026-0386
+  (`AsyncFd` I/O safety) can resolve, including in the fuzz crate.
+- Drop the unused RUSTSEC-2026-0173 ignore from `osv-scanner.toml`;
+  `proc-macro-error2` is not in the graph and `deny.toml` already
+  dropped it.
 - Pin and audit the MCP Inspector consumer at 2.14.0 with a committed npm
   lock. Check unpublished version branches against the audited core source
   while keeping registry publication checks separate.

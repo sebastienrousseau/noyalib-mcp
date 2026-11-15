@@ -17,7 +17,7 @@ axum = { version = "0.8", default-features = false }
 # Reuse the same SDK and runtime already selected by the application.
 futures = "0.3"
 rmcp = "3.9"
-tokio = "1"
+tokio = "1.53.3"
 
 [dependencies.noyalib-mcp]
 path = ".."
