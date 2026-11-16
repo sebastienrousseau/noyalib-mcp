@@ -117,11 +117,23 @@ criteria = "safe-to-deploy"
 delta = "0.58.5 -> 0.60.2"
 notes = "Reviewed complete ECMA character-class and whitespace translation delta: bounded UTF-8 character offsets, linear safe-Rust scans and fixed whitespace ranges; no new unsafe code or ambient capabilities. Archive SHA-256 107aeb6ff14b8deb5610096a8ce5c554ec89806b521147eaeb3cae05b07edb7a. See supply-chain/reviews/v0.0.59.md."
 
+[[audits.jsonschema-regex]]
+who = "Claude Code (claude-opus-5-5)"
+criteria = "safe-to-deploy"
+delta = "0.60.2 -> 0.61.2"
+notes = "Reviewed the packaged source delta: two new modules (repetition.rs, sequence.rs) rewrite ECMA-262 patterns into cheaper regex-syntax forms with fixed size budgets, and the translator runs in one pass. No unsafe code, IO, environment, process or network access; unwrap and expect appear only in tests. No dependency changes. Publisher remains Dmitry Dygalo (crates.io user 82692)."
+
 [[audits.jsonschema-value]]
 who = "OpenAI Codex"
 criteria = "safe-to-deploy"
 delta = "0.58.5 -> 0.60.2"
 notes = "Reviewed complete decimal-budget and object-comparison delta: checked/saturating exponent handling, bounded materialization and safe-Rust modular arithmetic. Build script unchanged; optional foreign bindings remain disabled in these consumers. Archive SHA-256 e281d6b177bb4834f2ffd6f92aa0443cffe29c996b251c8d94eb6f456186feba. See supply-chain/reviews/v0.0.59.md."
+
+[[audits.jsonschema-value]]
+who = "Claude Code (claude-opus-5-5)"
+criteria = "safe-to-deploy"
+delta = "0.60.2 -> 0.61.2"
+notes = "Reviewed the packaged source delta: an exact i64 fast path in number comparison, name-node iteration over members, and a string-length bound helper. New unsafe blocks are confined to the Ruby (magnus) and Python (pyo3) bindings, which are behind features noyalib does not enable (it uses default, serde_json); the jsonb thread-local buffer is behind the jsonb feature. No IO or network access. Publisher remains Dmitry Dygalo (crates.io user 82692)."
 
 [[audits.libc]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
@@ -362,6 +374,12 @@ delta = "0.8.27 -> 0.8.55"
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.20 -> 1.0.23"
+
+[[trusted.fancy-regex]]
+criteria = "safe-to-deploy"
+user-id = 308963 # Keith Hall (keith-hall)
+start = "2025-08-01"
+end = "2027-05-09"
 
 [[trusted.jsonschema]]
 criteria = "safe-to-deploy"
