@@ -345,6 +345,12 @@ who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.18 -> 1.0.24"
 
+[[audits.uuid]]
+who = "Claude Code (claude-opus-5-5)"
+criteria = "safe-to-deploy"
+delta = "1.29.0 -> 1.29.2"
+notes = "Reviewed the published crate diff. timestamp.rs moves to saturating nanosecond arithmetic and a Mutex-guarded monotonic clock, with new tests; target cfgs switch from target_arch wasm32 to target_family wasm; zerocopy is gated behind cfg(uuid_unstable) and the optional rand moves to 0.20. No unsafe, I/O, process, FFI or build script added."
+
 [[audits.walkdir]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
