@@ -33,6 +33,9 @@ v0.0.60 to v0.0.62. Every v0.0.61 change below ships here.
 - GitHub Actions: cosign-installer 4.1.3, codeql-action 4.39.3 and three
   more pins from the github-actions group (#154).
 - uuid 1.29.2 in Cargo.lock, with a cargo-vet delta audit (#153).
+- RUSTSEC-2026-0543 (chrono unmaintained) is accepted in deny.toml: rmcp
+  requires chrono in every release, and no patched chrono exists. The
+  entry comes out once rmcp drops it (modelcontextprotocol/rust-sdk#1469).
 
 ## [v0.0.61] - Not published
 
