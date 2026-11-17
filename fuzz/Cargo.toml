@@ -11,6 +11,12 @@ license = "MIT OR Apache-2.0"
 [package.metadata]
 cargo-fuzz = true
 
+# `session_lifecycle` compiles `src/transport/sessions.rs` through a
+# `#[path]` module, and that file imports `futures`. cargo-machete scans
+# only this crate's own sources, so it cannot see the import.
+[package.metadata.cargo-machete]
+ignored = ["futures"]
+
 [dependencies]
 libfuzzer-sys = "0.4"
 axum = { version = "0.8", default-features = false }
