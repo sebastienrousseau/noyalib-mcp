@@ -56,6 +56,11 @@ jobs:
           pin = dependency if isinstance(dependency, str) else dependency['version']
           if product['package']['version'] != package['version'] or pin != '=' + package['version']:
               raise SystemExit('candidate core does not match the exact product version')
+          lock = tomllib.loads((root / 'Cargo.lock').read_text())
+          if any(entry['name'] == 'noyalib' and entry['version'] == package['version'] and 'source' in entry
+                 for entry in lock['package']):
+              print('noyalib ' + package['version'] + ' is locked from crates.io; testing the published core.')
+              raise SystemExit(0)
           config = root / '.cargo/config.toml'
           config.parent.mkdir(exist_ok=True)
           with config.open('x') as stream:
