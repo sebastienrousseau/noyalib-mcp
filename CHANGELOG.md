@@ -11,7 +11,100 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
-## [v0.0.60] - 2026-11-10
+## [v0.0.62] - 2026-11-17
+
+v0.0.61 was never published: on 2026-11-15 the maintainer folded it into
+this release, in lockstep with the core, so the registry goes from
+v0.0.60 to v0.0.62. Every v0.0.61 change below ships here.
+
+### Changed
+
+- **Breaking:** the core refuses a byte order mark (U+FEFF) inside plain
+  and block scalars and comments, as YAML 1.2.2 requires; quoted scalars
+  and a document prefix keep it. Tools that parse such input now return
+  a parse error.
+- **Breaking:** error paths bracket sequence indices (`items[0].name`,
+  was `items.0.name`).
+- The exact core pin, `server.json`, `glama.json` and the npm wrapper
+  advance to 0.0.62.
+
+### Dependencies
+
+- GitHub Actions: cosign-installer 4.1.3, codeql-action 4.39.3 and three
+  more pins from the github-actions group (#154).
+- uuid 1.29.2 in Cargo.lock, with a cargo-vet delta audit (#153).
+- RUSTSEC-2026-0543 (chrono unmaintained) is accepted in deny.toml: rmcp
+  requires chrono in every release, and no patched chrono exists. The
+  entry comes out once rmcp drops it (modelcontextprotocol/rust-sdk#1469).
+
+## [v0.0.61] - Not published
+
+Folded into v0.0.62 (2026-11-15); there is no v0.0.61 tag or registry
+release.
+
+### Changed
+
+- `resources/list` and `resources/templates/list` explicitly state
+  `cacheScope: "public"` alongside `ttlMs` (SEP-2549) for the static
+  per-binary resource catalogue.
+- Retire the unpublished v0.0.60 release attempt by maintainer decision on
+  2026-11-13. Preserve signed tag object
+  `b28d529f8bae59bbe94bdd91d25ec50173c8702b` and its source unchanged.
+  That source contains session-admission and blocking-work defects; its
+  registry core dependency also retains the Unicode root-edit panic.
+  The next publication is v0.0.61 with the fixed six-crate family after
+  release gates and independent review. MCP intentionally has no v0.0.60
+  registry publication; this is an approved lockstep-policy exception.
+- Require rustix 1.1.6 for Unix filesystem operations, including downstream
+  dependency resolution.
+- Require tokio 1.53.3 so no release affected by RUSTSEC-2026-0386
+  (`AsyncFd` I/O safety) can resolve, including in the fuzz crate.
+- Drop the unused RUSTSEC-2026-0173 ignore from `osv-scanner.toml`;
+  `proc-macro-error2` is not in the graph and `deny.toml` already
+  dropped it.
+- Pin and audit the MCP Inspector consumer at 2.14.0 with a committed npm
+  lock. Check unpublished version branches against the audited core source
+  while keeping registry publication checks separate.
+- Preserve unsigned radix string keys during serialization. Escalate CST
+  root shape changes to a full parse to preserve UTF-8 token boundaries.
+- Core parsing now preserves anchor declaration order and clips only a
+  final line break present in the input. These are breaking parse behavior
+  corrections under the family's patch-version policy.
+- Release dry runs guard signing and GitHub release creation. Version
+  checks include every tracked Cargo lock.
+- Execute documented stdio clients against the real six-tool catalogue.
+  File demos use a private scratch root, verify preserved source and
+  readback, and reject a failed server exit. Correct root, capability,
+  timeout and benchmark guidance; require Python 3 for these examples.
+- Prepare the next lockstep version for the ecosystem assurance work.
+  Release dates and completed changes are recorded after verification.
+
+### Fixed
+
+- Retain the 22-byte leading-CR Unicode root-edit regression in the direct
+  tools corpus and a real stdio session. The corrected core CST repair
+  keeps wrapper bytes outside the edited tree; the session answers a
+  subsequent parse after the edit.
+
+### Security
+
+- Bound outstanding blocking tool jobs to 64 per process across every
+  handler and transport. Jobs retain capacity after timeout or client
+  cancellation until work ends; excess work receives a readable busy
+  result. Completion and panic release capacity.
+- Serialize session capacity checks with SDK insertion for both creation
+  and restoration. Concurrent requests can no longer admit extra sessions
+  above the configured cap. Retain a deterministic race reproducer.
+- Pin fuzz-workspace Tokio to patched 1.54.1 for RUSTSEC-2026-0386.
+  The existing production Tokio version and reviewed SDK are retained.
+- Audit nested lockfiles and fuzz HTTP header guards.
+- Verify offline recovery and corrupted-cache refusal using the installed npm wrapper.
+
+## [v0.0.60] - Retired, never published
+
+The 2026-11-10 signed release attempt was retired on 2026-11-13.
+The historical tag remains unchanged. The following entries describe that
+attempt's source, not a published package.
 
 ### Changed
 
@@ -76,6 +169,8 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ### Fixed
 
+- Describe unrestricted JSON output and nullable fields with portable
+  schema objects. Preserve scalar, array, object, null and absent values.
 - The npm wrapper publishes again. The v0.0.55 release built and
   attached every per-target archive, but the step that writes the
   wrapper's `digests.json` unpacked the Windows `.zip` with `tar`, which

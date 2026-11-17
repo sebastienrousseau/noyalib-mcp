@@ -95,7 +95,34 @@ impl fmt::Display for SetMultidocOutput {
 pub struct ParseOutput {
     /// One JSON value per document of the stream, custom tags
     /// stripped. A single-document text gives one element.
+    #[schemars(schema_with = "json_documents_schema")]
     pub documents: Vec<JsonValue>,
+}
+
+// Explicitly name all JSON types while retaining the unrestricted value
+// contract. Some MCP clients reject schemars' equivalent boolean `true`.
+fn json_documents_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "array",
+        "items": {"anyOf": [
+            {"type": "null"}, {"type": "boolean"}, {"type": "number"},
+            {"type": "string"}, {"type": "array"}, {"type": "object"}
+        ]}
+    })
+}
+
+// Change only schema spelling. Keep Option's required/absent behavior and
+// each branch's existing constraints, descriptions and examples.
+fn single_type_branches(schema: &mut schemars::Schema) {
+    let Some(types) = schema.get("type").and_then(JsonValue::as_array).cloned() else {
+        return;
+    };
+    schema.remove("type");
+    let branches = types
+        .into_iter()
+        .map(|kind| serde_json::json!({"type": kind}))
+        .collect();
+    schema.insert("anyOf".to_owned(), JsonValue::Array(branches));
 }
 
 impl fmt::Display for ParseOutput {
@@ -143,12 +170,15 @@ pub struct ValidateOutput {
     pub valid: bool,
     /// The parse error, when the text does not parse.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(transform = single_type_branches)]
     pub error: Option<String>,
     /// The line of the parse error, when there is one.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(transform = single_type_branches)]
     pub line: Option<usize>,
     /// The column of the parse error, when there is one.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(transform = single_type_branches)]
     pub column: Option<usize>,
     /// Every schema violation; empty when the document is valid or
     /// no schema was given.
@@ -573,19 +603,47 @@ pub(crate) fn outside(file: &str) -> String {
 /// an error. See [`YamlServer::with_call_timeout`].
 pub const DEFAULT_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+// Bound outstanding blocking jobs across all handlers and transports. A job
+// keeps its place after request timeout or cancellation until the work ends.
+const MAX_BLOCKING_JOBS: usize = 64;
+static BLOCKING_SLOTS: std::sync::LazyLock<std::sync::Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| {
+        std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_BLOCKING_JOBS))
+    });
+
 /// Run a tool's work on the blocking pool, off the async workers, and
 /// answer with an error if it outlasts `limit`.
 ///
 /// File I/O and parsing block. On a worker thread a slow call would
 /// stall every other request on that worker, `ping` included. A call
 /// past its time limit is answered at once; its thread cannot be
-/// interrupted and finishes in the background, its result discarded.
+/// interrupted and finishes in the background, its result discarded. Its
+/// capacity permit belongs to that work until completion, including panic.
 async fn off_thread<T, F>(limit: std::time::Duration, work: F) -> Result<T, String>
 where
     T: Send + 'static,
     F: FnOnce() -> Result<T, String> + Send + 'static,
 {
-    match tokio::time::timeout(limit, tokio::task::spawn_blocking(work)).await {
+    run_blocking(std::sync::Arc::clone(&BLOCKING_SLOTS), limit, work).await
+}
+
+async fn run_blocking<T, F>(
+    slots: std::sync::Arc<tokio::sync::Semaphore>,
+    limit: std::time::Duration,
+    work: F,
+) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    let permit = slots
+        .try_acquire_owned()
+        .map_err(|_| "the server is busy; retry after an outstanding call completes".to_owned())?;
+    let job = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        work()
+    });
+    match tokio::time::timeout(limit, job).await {
         Ok(joined) => joined.unwrap_or_else(|e| Err(internal(e))),
         Err(_) => Err(format!(
             "the call ran past the {} ms time limit and was abandoned",
@@ -678,6 +736,7 @@ pub struct ValidateArgs {
     /// A JSON Schema, as JSON text (optional).
     #[schemars(example = &"{\"type\":\"object\",\"required\":[\"server\"]}")]
     #[serde(default)]
+    #[schemars(transform = single_type_branches)]
     pub schema: Option<String>,
 }
 

@@ -20,7 +20,13 @@ yanked = "warn"
 # audit` and the OpenSSF Scorecard Vulnerabilities check stay
 # clean without needing per-advisory exemptions.
 ignore = [
-    # Nothing currently ignored.
+    # chrono is flagged unmaintained, with no patched version. It is not a
+    # vulnerability report. This crate does not depend on chrono: rmcp
+    # requires it in every release through 3.11.0 and enables schemars'
+    # chrono04 feature. Remove this entry once rmcp drops chrono
+    # (modelcontextprotocol/rust-sdk#1469). Accepted by the maintainer
+    # for v0.0.62.
+    { id = "RUSTSEC-2026-0543", reason = "unmaintained chrono, required by rmcp; see rust-sdk#1469" },
     #
     # RUSTSEC-2026-0173 (proc-macro-error2, unmaintained) was listed here,
     # but cargo-deny reports it as `advisory-not-detected`: proc-macro-error2

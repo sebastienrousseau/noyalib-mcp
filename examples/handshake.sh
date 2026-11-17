@@ -1,18 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 Noyalib
 # SPDX-License-Identifier: MIT OR Apache-2.0
-#
-# Drive an `initialize` → `tools/list` round-trip against
-# `noyalib-mcp`. Useful as a smoke test that the server binary
-# is on $PATH and announces the expected tool set.
-#
-# Transport: stdio with newline-delimited JSON-RPC 2.0
-# (per the MCP specification).
+# Initialize and discover the six registered tools.
+# Requires Python 3 and noyalib-mcp on PATH, or NOYALIB_MCP_BIN.
 
 set -euo pipefail
-
-{
-    echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke-test","version":"0.0.1"}}}'
-    echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
-    echo '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
-} | noyalib-mcp
+example_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "${PYTHON:-python3}" "$example_dir/mcp-session.py" handshake

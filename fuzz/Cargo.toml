@@ -11,8 +11,19 @@ license = "MIT OR Apache-2.0"
 [package.metadata]
 cargo-fuzz = true
 
+# `session_lifecycle` compiles `src/transport/sessions.rs` through a
+# `#[path]` module, and that file imports `futures`. cargo-machete scans
+# only this crate's own sources, so it cannot see the import.
+[package.metadata.cargo-machete]
+ignored = ["futures"]
+
 [dependencies]
 libfuzzer-sys = "0.4"
+axum = { version = "0.8", default-features = false }
+# Reuse the same SDK and runtime already selected by the application.
+futures = "0.3"
+rmcp = "3.9"
+tokio = "1.53.3"
 
 [dependencies.noyalib-mcp]
 path = ".."
@@ -20,6 +31,20 @@ path = ".."
 [[bin]]
 name = "tools"
 path = "fuzz_targets/tools.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "http_headers"
+path = "fuzz_targets/http_headers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "session_lifecycle"
+path = "fuzz_targets/session_lifecycle.rs"
 test = false
 doc = false
 bench = false

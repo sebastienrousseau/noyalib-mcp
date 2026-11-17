@@ -44,18 +44,16 @@ To restrict the tools to a specific working directory:
   "mcpServers": {
     "noyalib": {
       "command": "noyalib-mcp",
-      "args": [],
-      "env": {
-        "NOYALIB_MCP_ROOT": "/Users/me/Projects/configs"
-      }
+      "args": ["--root", "/Users/me/Projects/configs"]
     }
   }
 }
 ```
 
-(The `NOYALIB_MCP_ROOT` env var is honoured by the server when
-present; tool calls that reference paths outside this root
-return `-32000` "outside permitted root".)
+The server accepts `--root`; it does not read a `NOYALIB_MCP_ROOT`
+environment variable. File tools refuse paths outside the configured root
+with a readable `isError` tool result. See the
+[tools reference](tools-reference.md#paths-and-failures).
 
 ## Cursor
 
@@ -150,34 +148,29 @@ Agents wielding the noyalib MCP tools handle prompts like:
 > the current count, then `noyalib_set` to write the incremented
 > value. Each file's comments and indentation survive intact.
 
-## Why MCP for YAML editing?
+## Editing and file access
 
-Existing approaches:
-
-- **`sed` / `yq`** — text-or-AST replacement that often loses
-  comments, normalises indentation, and breaks anchor references
-- **`Edit` tool with full file rewrite** — agent regenerates the
-  whole file from memory, which scrambles comments, comments
-  drift, and is hard to review
-- **MCP `noyalib_set`** — surgical edit through the lossless CST.
-  One value changes; everything else is byte-identical
-
-This is the same property that makes `noyafmt --fix` safe: the
-green tree preserves trivia by construction.
+`noyalib_set` and `noyalib_set_multidoc` replace a selected YAML fragment
+while preserving untouched source. Inline `noyalib_edit` returns source
+without writing a file. Command-line formatting is provided by `noyafmt
+--write` in the separate CLI crate.
 
 ## Security considerations
 
-- **Server has full filesystem access** — it can read and write
-  any path the user running the binary can. For untrusted
-  environments, use `NOYALIB_MCP_ROOT` to confine to a directory.
-- **No authentication on the JSON-RPC channel** — MCP runs over
-  stdio; the security boundary is the OS process. Don't expose
-  the binary over a network without an authenticating proxy.
-- **Path traversal** — the server resolves paths as-given. If
-  client-side path sanitisation matters, sanitise before calling.
+- File tools use the configured `--root`, defaulting to the working
+  directory. Run with the smallest root and OS permissions required.
+- Unix directory-relative opens constrain symlinks and path traversal.
+  The canonical-path fallback on other platforms has different concurrent
+  path-swap guarantees; see [`src/fsio.rs`](../src/fsio.rs).
+- Stdio relies on the host process boundary. HTTP Host/Origin guards are
+  not client authentication. Expose a network service only within an
+  appropriate access-controlled deployment.
+- A call timeout cannot interrupt a running blocking operation. Verify
+  completion before retrying an uncertain mutation; coordinate writers
+  to the same file externally.
 
-For the full security policy see the workspace
-[SECURITY.md](../SECURITY.md).
+See the [security policy](../SECURITY.md) and
+[tool limits](tools-reference.md#root-resources-and-work-limits).
 
 ## Troubleshooting
 
@@ -205,13 +198,14 @@ allow-listing. Check the agent's tool-permissions UI; toggle
 ### Working directory differs from expectation
 
 The server inherits the working directory of its parent process
-(the agent). Relative paths in tool arguments resolve from there.
-Use absolute paths when in doubt.
+(the agent). Relative file arguments resolve under the configured root; its default
+is the inherited working directory. Set `--root` explicitly for a client
+whose working directory is uncertain.
 
 ## Related
 
 - [Tools reference](./tools-reference.md) — full input schemas
   and error codes
 - [Crate README](../README.md) — install + crate-level overview
-- [`crates/noyalib-mcp/examples/`](../examples/) — handshake.sh
+- [`examples/`](../examples/) — handshake.sh
   and other diagnostic scripts

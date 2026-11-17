@@ -1,0 +1,139 @@
+{
+  "source_commit": "1e02ea5d1afffbfa068ef1c439934295d4af60ef",
+  "tools": [
+    {
+      "name": "noyalib_parse",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "yaml": {
+            "description": "The YAML text to parse.",
+            "examples": [
+              "server:\n  host: api.example.com  # public\n  port: 8080\n"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "yaml"
+        ],
+        "$schema": "https://json-schema.org/draft/2020-12/schema"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "description": "One JSON value per document of the stream, custom tags\nstripped. A single-document text gives one element.",
+            "items": true,
+            "type": "array"
+          }
+        },
+        "required": [
+          "documents"
+        ],
+        "$schema": "https://json-schema.org/draft/2020-12/schema"
+      }
+    },
+    {
+      "name": "noyalib_validate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "default": null,
+            "description": "A JSON Schema, as JSON text (optional).",
+            "examples": [
+              "{\"type\":\"object\",\"required\":[\"server\"]}"
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "yaml": {
+            "description": "The YAML text to validate.",
+            "examples": [
+              "server:\n  host: api.example.com  # public\n  port: 8080\n"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "yaml"
+        ],
+        "$schema": "https://json-schema.org/draft/2020-12/schema"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "column": {
+            "description": "The column of the parse error, when there is one.",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "error": {
+            "description": "The parse error, when the text does not parse.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "description": "The line of the parse error, when there is one.",
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "valid": {
+            "description": "Whether the text parses and, when a schema was given, satisfies\nit.",
+            "type": "boolean"
+          },
+          "violations": {
+            "description": "Every schema violation; empty when the document is valid or\nno schema was given.",
+            "items": {
+              "$ref": "#/$defs/Violation"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "valid",
+          "violations"
+        ],
+        "$defs": {
+          "Violation": {
+            "description": "One JSON Schema violation.",
+            "properties": {
+              "keyword": {
+                "description": "The schema keyword that failed.",
+                "type": "string"
+              },
+              "message": {
+                "description": "What is wrong with it.",
+                "type": "string"
+              },
+              "path": {
+                "description": "The RFC 6901 path of the offending value.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "keyword",
+              "message"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema"
+      }
+    }
+  ]
+}

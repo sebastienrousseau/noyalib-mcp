@@ -5,9 +5,8 @@
 
 `noyalib-mcp` is a Model Context Protocol server that gives an AI
 agent lossless YAML editing. It speaks MCP over stdio, streamable
-HTTP or the older HTTP+SSE transport, and delegates every YAML
-operation to `noyalib::cst::Document`, so an edit preserves comments,
-indentation, and sibling entries byte for byte.
+HTTP or the older HTTP+SSE transport, and delegates parsing and editing to noyalib. CST edits preserve
+untouched comments, indentation and sibling source.
 
 The protocol itself is [`rmcp`](https://crates.io/crates/rmcp), the
 official Rust SDK: the framing, the handshake, the sessions and the
@@ -17,16 +16,15 @@ text a model reads. See
 
 ## Layers
 
-- **`src/main.rs`** is three lines: it hands the library's handler to
-  `transport::run`.
+- **`src/main.rs`** passes the version, arguments and handler factory
+  to `transport::run`.
 - **`src/transport.rs`** is the transport dispatch: the command line
   (`--transport`, `--host`, `--port`, `--version`, `--help`), the
   stdio session, the streamable HTTP listener at `/mcp`, and a bridge
   for the 2024-11-05 HTTP+SSE transport at `/sse` and `/messages/`
   (in `src/transport/sse.rs`) that the SDK no longer ships a server
-  for. It depends only on the SDK and on a `ServerHandler` passed in —
-  nothing in it knows what the tools are — so it is the same module in
-  every Rust server of the suite.
+  for. It accepts a `ServerHandler` factory and the crate's parse profile.
+  Tool dispatch remains in the handler.
 - **`src/lib.rs`** is the handler: `YamlServer` holds the tool and
   prompt routers, describes the server for `initialize` and
   `server/discover`, serves the resources, and turns a call for a tool
@@ -66,8 +64,14 @@ JSON-RPC error, which the client handles.
 
 Everything the agent sends arrives through the SDK and reaches the six
 functions as deserialised arguments. Those functions are the surface
-this crate owns, and the stateless three are fuzzed directly
-(`fuzz_targets/tools.rs`); CI replays the seed corpus on every push.
+this crate owns. The stateless three are fuzzed directly (`tools`), HTTP
+header guards separately (`http_headers`), and the actual private capped
+SDK manager through a bounded state model (`session_lifecycle`). The state
+target retains live transports, checks create/restore/close against its
+model, races admissions and verifies capacity reuse. It uses no listener
+or input-controlled filesystem path; wire framing remains a separate
+protocol-test scope. CI builds every target and replays seeds on every push;
+scheduled campaigns retain elapsed time, executions, source and findings.
 
 The HTTP listeners exist only when `--transport` asks for them, bind
 the loopback interface unless `--host` says otherwise, and do not

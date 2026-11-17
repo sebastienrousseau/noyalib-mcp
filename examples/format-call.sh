@@ -1,18 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 Noyalib
 # SPDX-License-Identifier: MIT OR Apache-2.0
-#
-# Call the `format` tool on a poorly-formatted YAML document.
-# Demonstrates the byte-faithful CST formatter from an AI-agent
-# perspective: comments + indentation preserved through the
-# round-trip.
+# Request the formatting workflow prompt; no format tool is registered.
+# Requires Python 3 and noyalib-mcp on PATH, or NOYALIB_MCP_BIN.
 
 set -euo pipefail
-
-YAML_DOC='# production config\nserver:\n  host:    api.example.com   # endpoint\n  port:8080\n'
-
-{
-    echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"format-demo","version":"0.0.1"}}}'
-    echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
-    printf '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"format","arguments":{"yaml":"%s"}}}\n' "$YAML_DOC"
-} | noyalib-mcp
+example_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "${PYTHON:-python3}" "$example_dir/mcp-session.py" prompt

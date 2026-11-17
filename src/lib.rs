@@ -80,14 +80,11 @@
 //! requests are capped in size, nesting and time. Full posture:
 //! [`SECURITY.md`](https://github.com/sebastienrousseau/noyalib-mcp/blob/main/SECURITY.md).
 //!
-//! # API stability and SemVer
+//! # API stability and versioning
 //!
-//! Pre-1.0 (`0.0.x`): the MCP wire contract (tool names, input-schema
-//! shapes, the failure taxonomy) is **stable** within a 0.0.x line --
-//! bug fixes only. Adding a tool is allowed within a 0.0.x bump;
-//! removing or renaming one is held to a 0.x bump. The Rust surface is
-//! the six functions, their argument and output types, and
-//! [`YamlServer`].
+//! The family increments strictly by +0.0.1 in lockstep. Changes to
+//! parsing behavior, wire/output shapes or exported interfaces are breaking
+//! changes on that axis and must be documented under the family policy.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -96,7 +93,7 @@ use rmcp::handler::server::router::prompt::PromptRouter;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ErrorData,
+    CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ErrorData,
     Implementation, ListResourceTemplatesResult, ListResourcesResult, PaginatedRequestParams,
     ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, ServerCapabilities,
     ServerConfig,
@@ -194,7 +191,10 @@ impl YamlServer {
     /// The same server answering any tool call that runs longer than
     /// `limit` with an error ([`DEFAULT_CALL_TIMEOUT`] unless set). The
     /// work itself cannot be interrupted: it finishes on its blocking
-    /// thread and its result is dropped.
+    /// thread and its result is dropped. The process admits at most 64
+    /// outstanding blocking jobs across all handlers. Timed-out or cancelled
+    /// requests keep their job's slot until it finishes; excess calls receive
+    /// a readable busy tool failure without starting more work.
     #[must_use]
     pub fn with_call_timeout(mut self, limit: std::time::Duration) -> Self {
         self.call_timeout = limit;
@@ -289,7 +289,9 @@ impl ServerHandler for YamlServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListResourcesResult, ErrorData> {
-        Ok(ListResourcesResult::with_all_items(resources::list()).with_ttl_ms(CACHE_TTL_MS))
+        Ok(ListResourcesResult::with_all_items(resources::list())
+            .with_ttl_ms(CACHE_TTL_MS)
+            .with_cache_scope(CacheScope::Public))
     }
 
     async fn list_resource_templates(
@@ -299,7 +301,8 @@ impl ServerHandler for YamlServer {
     ) -> Result<ListResourceTemplatesResult, ErrorData> {
         Ok(
             ListResourceTemplatesResult::with_all_items(resources::templates())
-                .with_ttl_ms(CACHE_TTL_MS),
+                .with_ttl_ms(CACHE_TTL_MS)
+                .with_cache_scope(CacheScope::Public),
         )
     }
 

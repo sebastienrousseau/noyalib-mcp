@@ -4,13 +4,13 @@
 # noyalib-mcp (npm wrapper)
 
 Run the `noyalib-mcp` Model Context Protocol server from any
-machine with Node.js — no Rust toolchain required.
+supported platform with Node.js 18 or later. The wrapper does not need a Rust toolchain.
 
 ```bash
-npx noyalib-mcp                       # one-shot, downloads on first run
+npx @sebastienrousseau/noyalib-mcp          # downloads on first run
 # or
-npm install -g noyalib-mcp            # global install for repeat use
-noyalib-mcp                           # spawns the MCP server over stdio
+npm install -g @sebastienrousseau/noyalib-mcp
+noyalib-mcp                                 # runs over stdio
 ```
 
 The wrapper downloads the platform-appropriate `noyalib-mcp`
@@ -26,6 +26,23 @@ it downloads and runs nothing, and says so. Releases up to and
 including 0.0.54 ship no per-platform archives and no `digests.json`,
 so for those use `cargo install noyalib-mcp --locked` or the container
 `ghcr.io/sebastienrousseau/noyalib-mcp`.
+
+## Offline use and recovery
+
+Prebuilt binaries cover Linux x64 and ARM64, macOS x64 and ARM64, and
+Windows x64. Warm the cache on the same platform and with the same package
+version before going offline:
+
+```bash
+npx @sebastienrousseau/noyalib-mcp --version
+```
+
+If the wrapper reports a corrupt cached binary, remove only the reported
+file, then rerun the command with network access. The wrapper verifies the
+replacement against the digest in the installed package. A missing cache
+cannot be populated offline without a separately verified release archive.
+Use the version-specific GitHub release or another documented install channel
+if the download service is unavailable.
 
 ## Why a wrapper?
 

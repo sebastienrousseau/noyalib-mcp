@@ -73,6 +73,142 @@ fn is_error(r: &CallToolResult) -> bool {
 // ── the catalogue ──────────────────────────────────────────────
 
 #[test]
+fn portable_schemas_keep_the_captured_value_contract() {
+    let baseline: JsonValue = serde_json::from_str(include_str!(
+        "../../tests/fixtures/tool-schema-before-portability.json"
+    ))
+    .unwrap();
+    let tools = YamlServer::tool_router().list_all();
+    let values = [
+        json!(null),
+        json!(false),
+        json!(42),
+        json!(1.5),
+        json!("text"),
+        json!([null, {"nested": []}]),
+        json!({"nested": [true]}),
+    ];
+    for reference in baseline["tools"].as_array().unwrap() {
+        let name = reference["name"].as_str().unwrap();
+        let tool = tools.iter().find(|tool| tool.name == name).unwrap();
+        for (kind, actual) in [
+            ("inputSchema", tool.input_schema.as_ref()),
+            (
+                "outputSchema",
+                tool.output_schema.as_ref().unwrap().as_ref(),
+            ),
+        ] {
+            let old = serde_json::to_string(&reference[kind]).unwrap();
+            let new = serde_json::to_string(actual).unwrap();
+            let mut cases = values.to_vec();
+            cases.extend([
+                json!({}),
+                json!({"yaml": "valid"}),
+                json!({"documents": []}),
+                json!({"valid": true, "violations": []}),
+            ]);
+            for value in &values {
+                cases.extend([
+                    json!({"yaml": "valid", "schema": value}),
+                    json!({"documents": value}),
+                    json!({"documents": [value]}),
+                    json!({"valid": true, "violations": [], "error": value}),
+                    json!({"valid": true, "violations": [], "line": value}),
+                    json!({"valid": true, "violations": [], "column": value}),
+                ]);
+            }
+            for value in cases {
+                let instance: noyalib::Value = serde_json::from_value(value.clone()).unwrap();
+                assert_eq!(
+                    schema_violations(&instance, &old).unwrap().is_empty(),
+                    schema_violations(&instance, &new).unwrap().is_empty(),
+                    "{name} {kind}: {value}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn parse_schema_names_every_json_value_type_without_narrowing_documents() {
+    let tools = YamlServer::tool_router().list_all();
+    let tool = tools
+        .iter()
+        .find(|tool| tool.name == "noyalib_parse")
+        .unwrap();
+    let schema = tool.output_schema.as_ref().unwrap();
+    assert_eq!(
+        schema["properties"]["documents"]["items"],
+        json!({"anyOf": [
+            {"type": "null"}, {"type": "boolean"}, {"type": "number"},
+            {"type": "string"}, {"type": "array"}, {"type": "object"}
+        ]})
+    );
+    for (yaml, expected) in [
+        ("null", json!(null)),
+        ("true", json!(true)),
+        ("42", json!(42)),
+        ("1.5", json!(1.5)),
+        ("text", json!("text")),
+        ("[null, true]", json!([null, true])),
+        ("{key: [1, null]}", json!({"key": [1, null]})),
+    ] {
+        let result = call("noyalib_parse", json!({"yaml": yaml}));
+        assert_eq!(
+            result.structured_content,
+            Some(json!({"documents": [expected]}))
+        );
+    }
+}
+
+#[test]
+fn nullable_schemas_keep_null_and_absence_with_single_type_branches() {
+    let tools = YamlServer::tool_router().list_all();
+    let tool = tools
+        .iter()
+        .find(|tool| tool.name == "noyalib_validate")
+        .unwrap();
+    assert_eq!(
+        tool.input_schema["properties"]["schema"]["anyOf"],
+        json!([{"type": "string"}, {"type": "null"}])
+    );
+    assert!(
+        !tool.input_schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("schema"))
+    );
+    for args in [
+        json!({"yaml": "valid"}),
+        json!({"yaml": "valid", "schema": null}),
+    ] {
+        let result = call("noyalib_validate", args);
+        let content = result.structured_content.unwrap();
+        assert_eq!(content["valid"], true);
+        assert!(content.get("error").is_none());
+        assert!(content.get("line").is_none());
+        assert!(content.get("column").is_none());
+    }
+    let schema = tool.output_schema.as_ref().unwrap();
+    for (field, kind) in [
+        ("error", "string"),
+        ("line", "integer"),
+        ("column", "integer"),
+    ] {
+        assert_eq!(
+            schema["properties"][field]["anyOf"],
+            json!([{"type": kind}, {"type": "null"}])
+        );
+        assert!(
+            !schema["required"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(field))
+        );
+    }
+}
+
+#[test]
 fn every_tool_is_registered_with_schemas_and_annotations() {
     let tools = YamlServer::tool_router().list_all();
     let mut names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();

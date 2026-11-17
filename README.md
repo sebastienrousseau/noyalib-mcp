@@ -58,13 +58,19 @@
 
 ---
 
+## Development version
+
+This branch prepares unreleased v0.0.62. Versioned Cargo examples describe
+that upcoming release; use a published version for registry installation
+until it ships. Local verification uses the sibling core source explicitly.
+
 ## Install
 
 ### As a Rust library
 
 ```toml
 [dependencies]
-noyalib-mcp = "0.0.60"
+noyalib-mcp = "0.0.62"
 ```
 
 Install or run the server through the channel that fits the host:
@@ -225,11 +231,15 @@ make
 make test
 make clippy
 make fmt
-cargo fuzz run fuzz_tool_call
+cargo +nightly fuzz run tools
 ```
 
 CI checks Rust formatting, linting, tests, documentation, dependency policy,
-fuzz regressions, protocol behaviour, and the shared YAML test suite. See
+fuzz regressions, protocol behaviour, and the shared YAML test suite. The
+`tools` target exercises stateless tool inputs; `http_headers` exercises
+listener guards; `session_lifecycle` drives the actual capped SDK manager
+through create, restore, close, concurrent admission and capacity reuse.
+All targets run bounded scheduled campaigns and retain separate receipts. See
 [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
 ## Security
