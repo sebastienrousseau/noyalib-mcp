@@ -646,10 +646,15 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           archive="$scratch/sebastienrousseau-noyalib-mcp-$version.tgz"
           npm pack --ignore-scripts --pack-destination "$scratch" ./pkg/npm-wrapper
-          printf '%s\n' '{"private":true}' > "$scratch/package.json"
-          npm install --prefix "$scratch" --offline --ignore-scripts --no-save "$archive"
+          # Unpack the tarball where npm would install it. The wrapper has
+          # no dependencies and install scripts are off, so this is what
+          # `npm install <tarball>` lays down, without an `npm install`
+          # that Scorecard counts as an unpinned dependency.
+          installed="$scratch/node_modules/@sebastienrousseau/noyalib-mcp"
+          mkdir -p "$installed"
+          tar -xzf "$archive" -C "$installed" --strip-components=1
           node scripts/check-wrapper-recovery.js \
-            "$scratch/node_modules/@sebastienrousseau/noyalib-mcp" \
+            "$installed" \
             "$GITHUB_WORKSPACE/npm-binaries/noyalib-mcp-$version-x86_64-unknown-linux-musl.tar.gz" \
             | tee "$RUNNER_TEMP/wrapper-recovery.json"
 
