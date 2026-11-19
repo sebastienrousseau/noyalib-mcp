@@ -23,6 +23,18 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
   `noyalib_set` and `noyalib_set_multidoc` splice the caller's fragment
   through `Document::set`, so tool behaviour is unchanged.
 
+### Dependencies
+
+- GitHub Actions: taiki-e/install-action 2.90.3, actions/setup-python
+  7.1.0 and the shared core workflows at noyalib 0.0.60, from the
+  github-actions group (#156).
+
+### Security
+
+- The release job's wrapper check unpacks the packed npm tarball with
+  `tar` instead of `npm install`, which OpenSSF Scorecard counted as an
+  unpinned dependency (code-scanning alert #26).
+
 ## [v0.0.62] - 2026-11-17
 
 v0.0.61 was never published: on 2026-11-15 the maintainer folded it into
