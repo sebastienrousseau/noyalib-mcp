@@ -11,6 +11,18 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
+## [v0.0.63] - Unreleased
+
+### Changed
+
+- The exact core pin, `server.json`, `glama.json` and the npm wrapper
+  advance to 0.0.63. The core's only change in this release is in
+  `cst::Document::insert_entry_value`, which now double-quotes a
+  multi-line string holding a C1 control other than NEL, U+FFFE, U+FFFF
+  or a byte order mark (noyalib#533). No tool here calls it:
+  `noyalib_set` and `noyalib_set_multidoc` splice the caller's fragment
+  through `Document::set`, so tool behaviour is unchanged.
+
 ## [v0.0.62] - 2026-11-17
 
 v0.0.61 was never published: on 2026-11-15 the maintainer folded it into

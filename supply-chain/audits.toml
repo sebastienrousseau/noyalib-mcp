@@ -224,6 +224,12 @@ criteria = "safe-to-deploy"
 delta = "0.0.61 -> 0.0.62"
 notes = "Lockstep release metadata only: the crate version, the exact core pin and the server.json, glama.json and npm wrapper versions change; no Rust source changes. Behaviour changes come from the core and are reviewed with it."
 
+[[audits.noyalib-mcp]]
+who = "Claude Code (claude-opus-5-5)"
+criteria = "safe-to-deploy"
+delta = "0.0.62 -> 0.0.63"
+notes = "Lockstep release metadata only: the crate version, the exact core pin and the server.json, glama.json and npm wrapper versions change; no Rust source changes. The core's 0.0.63 change (insert_entry_value scalar style) is reviewed with the core and is not reached by any tool here."
+
 [[audits.pin-project-lite]]
 who = "Sebastien Rousseau <sebastian.rousseau@gmail.com>"
 criteria = "safe-to-deploy"
