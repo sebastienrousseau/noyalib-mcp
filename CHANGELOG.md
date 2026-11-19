@@ -34,6 +34,9 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 - The release job's wrapper check unpacks the packed npm tarball with
   `tar` instead of `npm install`, which OpenSSF Scorecard counted as an
   unpinned dependency (code-scanning alert #26).
+- `osv-scanner.toml` now accepts RUSTSEC-2026-0543 (unmaintained
+  chrono, required by rmcp), matching `deny.toml`, so Scorecard's
+  Vulnerabilities check stops reporting it (code-scanning alert #25).
 
 ## [v0.0.62] - 2026-11-17
 
