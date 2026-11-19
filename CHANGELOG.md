@@ -11,7 +11,7 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
-## [v0.0.63] - Unreleased
+## [v0.0.63] - 2026-11-19
 
 ### Changed
 
@@ -25,9 +25,11 @@ see that repository's `CHANGELOG.md` for the release-wide notes.
 
 ### Dependencies
 
-- GitHub Actions: taiki-e/install-action 2.90.3, actions/setup-python
-  7.1.0 and the shared core workflows at noyalib 0.0.60, from the
-  github-actions group (#156).
+- GitHub Actions: taiki-e/install-action 2.90.3 and actions/setup-python
+  7.1.0, from the github-actions group (#156); the shared core workflows
+  run from the v0.0.62 release commit.
+- cargo-vet records the core 0.0.62 -> 0.0.63 delta
+  (`supply-chain/reviews/v0.0.63.md`).
 
 ### Security
 
