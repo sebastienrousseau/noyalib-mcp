@@ -15,6 +15,14 @@
 # acceptance. If you remove an entry from `deny.toml`, remove it
 # from here too (or the Scorecard alert will re-open).
 
-# Nothing is ignored. RUSTSEC-2026-0173 (proc-macro-error2) was listed
-# here and in `deny.toml`; the crate left this graph, `deny.toml`
-# dropped it, and osv-scanner reported the entry unused.
+# RUSTSEC-2026-0173 (proc-macro-error2) was listed here and in
+# `deny.toml`; the crate left this graph, `deny.toml` dropped it, and
+# osv-scanner reported the entry unused.
+
+# chrono is unmaintained (RUSTSEC-2026-0543), and rmcp requires it in
+# every release with no feature to turn it off. Matches the
+# `deny.toml` entry. Remove both once rmcp drops chrono
+# (modelcontextprotocol/rust-sdk#1469).
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0543"
+reason = "unmaintained chrono, required by rmcp; see modelcontextprotocol/rust-sdk#1469"
