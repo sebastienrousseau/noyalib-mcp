@@ -11,6 +11,22 @@ and versions in lockstep with the
 [`noyalib`](https://github.com/sebastienrousseau/noyalib) core crate —
 see that repository's `CHANGELOG.md` for the release-wide notes.
 
+## [v0.0.64] - Unreleased
+
+### Changed
+
+- The exact core pin, `server.json`, `glama.json` and the npm wrapper
+  advance to 0.0.64. The core's change is a faster scanner path for
+  printable-ASCII plain and block scalars; it accepts and refuses
+  exactly what v0.0.63 did, so tool behaviour is unchanged.
+
+### Dependencies
+
+- `rmcp` 3.10.0 and `rmcp-macros` 3.11.0 in the lockfile (#159).
+- GitHub Actions: `taiki-e/install-action` 2.90.5 (#160).
+- Container build image: `rust:1.100-bookworm` (#158). The crate's
+  minimum Rust version is unchanged.
+
 ## [v0.0.63] - 2026-11-20
 
 ### Changed
